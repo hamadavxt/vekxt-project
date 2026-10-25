@@ -880,7 +880,7 @@ function pShowCard(o){
   var old=document.getElementById("pCardM");if(old)old.remove();
   var m=document.createElement("div");m.id="pCardM";m.className="pcm";
   m.innerHTML='<div class="pcm-b" role="dialog" aria-modal="true"><canvas id="pCardC"></canvas><div class="pcm-a"><button type="button" class="pcm-btn" id="pCardDl">'+L("Unduh PNG","Download PNG")+'</button><button type="button" class="pcm-btn g" id="pCardSh">'+L("Bagikan","Share")+'</button><button type="button" class="pcm-btn g" id="pCardX">'+L("Tutup","Close")+'</button></div></div>';
-  document.body.appendChild(m);
+  m.style.zIndex="400";document.body.appendChild(m);
   var cv=document.getElementById("pCardC"),fn="vekxt-pnl-"+String(o.pair||"card").replace(/[^A-Za-z0-9]+/g,"-")+".png";
   var close=function(){document.removeEventListener("keydown",esc2);m.remove()},esc2=function(e){if(e.key==="Escape")close()};
   document.addEventListener("keydown",esc2);
@@ -1494,7 +1494,7 @@ document.addEventListener("visibilitychange",function(){
 /* ===== TRADE: terminal layar penuh ala futures (dibuka dari tombol Trade Now) ===== */
 var TRS={type:"candle",col:"wr",vol:true,grid:true,magnet:false,lock:false,hide:false};
 try{var _ts=JSON.parse(localStorage.getItem("vzTr.set")||"{}");for(var _tk in _ts)TRS[_tk]=_ts[_tk]}catch(e){}
-var TRV=null,trCh=null,trCs=null,trVs=null,trCD=[],trKey="",trTool="cross",trDR=[],trTmp=null,trRul=null,trTab="chart",trLines=[],trLsig="",trTimer=null,trAt=0,trBkAt=0,trFail=0,trTy="market",trSd="buy",trRaf=false,trPSig="",trNoteT=null;
+var TRV=null,trCh=null,trCs=null,trVs=null,trCD=[],trKey="",trTool="cross",trDR=[],trTmp=null,trRul=null,trTab="chart",trLines=[],trLsig="",trTimer=null,trAt=0,trBkAt=0,trFail=0,trTy="market",trSd="buy",trRaf=false,trPSig="",trNoteT=null,trDrag=null,trTapE=null;
 var TRCSS='#vzTr{position:fixed;inset:0;z-index:300;background:#000;color:#eaecef;display:none;flex-direction:column;font:14px system-ui,-apple-system,sans-serif;padding-top:env(safe-area-inset-top);--up:#2EBD85;--dn:#F6465D;--mu:#848e9c;--ln:#23262d;--sf:#0e1013}'
 +'#vzTr *{box-sizing:border-box}#vzTr button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0}'
 +'.trhd{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--ln)}.trhd>button{font-size:24px;padding:2px 8px}.trg{flex:1}'
@@ -1517,7 +1517,7 @@ var TRCSS='#vzTr{position:fixed;inset:0;z-index:300;background:#000;color:#eaece
 +'.trrow{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--ln)}.trtg{width:44px!important;height:24px;border-radius:12px;background:var(--ln)!important;position:relative}.trtg:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}.trtg.on{background:var(--up)!important}.trtg.on:after{left:23px}'
 +'.trpk{display:flex;align-items:center;gap:8px;width:100%;padding:10px 0!important;border-bottom:1px solid var(--ln)!important}.trpk span:first-child{flex:1;text-align:left;font-weight:700}'
 +'#trNote{position:absolute;left:12px;right:12px;bottom:130px;background:#1c2026;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;display:none;z-index:6}'
-+'.trhide,#pTk{display:none!important}.trbtnwrap{margin:0 0 12px}.trbtnwrap .lg-btn{width:100%}';
++'.trhide,#pTk{display:none!important}.trbtnwrap{margin:0 0 12px}.trbtnwrap .lg-btn{width:100%}.trshr{width:28px;height:28px;display:inline-flex!important;align-items:center;justify-content:center;border:1px solid var(--ln)!important;border-radius:8px;color:var(--mu)}';
 (function(){var st=document.createElement("style");st.textContent=TRCSS;document.head.appendChild(st)})();
 function trSet(){try{localStorage.setItem("vzTr.set",JSON.stringify(TRS))}catch(e){}}
 function trDrSave(){try{localStorage.setItem("vzTr.dr:"+pSym,JSON.stringify(trDR))}catch(e){}}
@@ -1526,6 +1526,7 @@ function trAcc(){return selP!==null?PERPS[selP]:null}
 function trNote(s,bad){var e=$("trNote");if(!e)return;e.textContent=s;e.style.display="block";e.style.color=bad?"#F6465D":"#eaecef";clearTimeout(trNoteT);trNoteT=setTimeout(function(){e.style.display="none"},4000)}
 function trSheet(h){$("trSb").innerHTML=h;$("trSh").classList.add("on")}
 function trShut(){$("trSh").classList.remove("on")}
+var TRSHARE='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"/><path d="M8 8l4-4 4 4"/><path d="M5 13v6h14v-6"/></svg>';
 var TRTOOLS=[["cross","&#10010;"],["l","&#9585;"],["h","&#9776;"],["f","Fib"],["m","&#128207;"],["x","T"]];
 function trBuild(){
   TRV=document.createElement("div");TRV.id="vzTr";
@@ -1542,6 +1543,7 @@ function trBuild(){
     trTmp={t:trTool,a:p,b:p};try{ov.setPointerCapture(e.pointerId)}catch(x){}};
   ov.onpointermove=function(e){if(trTmp){var p=trPt(e);if(p)trTmp.b=p}};
   ov.onpointerup=function(){if(!trTmp)return;if(trTmp.t==="m")trRul=trTmp;else{trDR.push(trTmp);trDrSave()}trTmp=null;trTool="cross";trBar()};
+  trBindDrag($("trChEl"));
 }
 function trBar(){
   $("trTools").innerHTML=TRTOOLS.map(function(t){return'<button type="button" data-tt="'+t[0]+'" class="'+(trTool===t[0]?"on":"")+'">'+t[1]+'</button>'}).join("")+"<hr>"
@@ -1605,16 +1607,50 @@ function trTick(){
   if(trTab==="book"&&n-trBkAt>1500){trBkAt=n;trBook()}
 }
 function trSyncLines(a){
-  if(!trCs)return;var p=a.positions[pSym],b=BK[pSym],it=[];
+  if(!trCs||trDrag)return;var p=a.positions[pSym],b=BK[pSym],it=[];
   if(p){var px=b?(p.side==="long"?b.bid:b.ask):0,u=px?(p.side==="long"?px-p.entry:p.entry-px)*p.qty:null;
-    it.push({k:"e",price:p.entry,color:"#FFB43A",st:0,title:p.side.toUpperCase()+" "+p.lev+"x | "+(u===null?"-":pm(u))});
-    if(p.sl>0)it.push({k:"s",price:p.sl,color:"#F6465D",st:2,title:"SL"});if(p.tp>0)it.push({k:"t",price:p.tp,color:"#2EBD85",st:2,title:"TP"})}
+    it.push({k:"entry",price:p.entry,color:"#FFB43A",st:0,title:p.side.toUpperCase()+" "+p.lev+"x | "+(u===null?"-":pm(u))+((p.sl||p.tp)?"":" | tap = SL/TP")});
+    if(p.sl>0)it.push({k:"sl",price:p.sl,color:"#F6465D",st:2,title:pStopLbl("sl",p,p.sl)});if(p.tp>0)it.push({k:"tp",price:p.tp,color:"#2EBD85",st:2,title:pStopLbl("tp",p,p.tp)})}
   a.orders.forEach(function(o){if(o.symbol===pSym)it.push({k:"o"+o.id,price:o.price,color:"#4C8DFF",st:1,title:"LIMIT "+(o.side==="buy"?"LONG":"SHORT")})});
   var sig=JSON.stringify(it.map(function(i){return[i.k,i.price,i.color,i.st]}));
   if(sig!==trLsig){trLines.forEach(function(l){try{trCs.removePriceLine(l.h)}catch(e){}});
-    trLines=it.map(function(i){return{t:i.title,h:trCs.createPriceLine({price:i.price,color:i.color,lineWidth:1,lineStyle:i.st,axisLabelVisible:true,title:i.title})}});trLsig=sig}
+    trLines=it.map(function(i){return{k:i.k,price:i.price,t:i.title,h:trCs.createPriceLine({price:i.price,color:i.color,lineWidth:(i.k==="entry"||i.k==="sl"||i.k==="tp")?2:1,lineStyle:i.st,axisLabelVisible:true,title:i.title})}});trLsig=sig}
   else it.forEach(function(i,j){var l=trLines[j];if(l&&l.t!==i.title){l.t=i.title;l.h.applyOptions({title:i.title})}});
 }
+/* tap garis ENTRY -> SL/TP muncul, lalu geser garisnya (lepas jari = tersimpan) */
+function trNear(cy,kinds,tol){
+  var r=$("trChEl").getBoundingClientRect(),y=cy-r.top,hit=null,bd=tol||14;
+  trLines.forEach(function(l){if(!kinds[l.k])return;var c=trCs.priceToCoordinate(l.price);if(c!==null&&Math.abs(c-y)<bd){bd=Math.abs(c-y);hit=l}});
+  return hit}
+function trApplyLevel(k,price){
+  var a=trAcc(),p=a&&a.positions[pSym];if(!p||a.status!=="active"||!(price>0)){trLsig="";return false}
+  price=pRound(price);var b=BK[pSym],lg=p.side==="long",ref=b?(lg?b.bid:b.ask):0,bad=k==="sl"?(lg?price>=ref:price<=ref):(lg?price<=ref:price>=ref);
+  if(ref&&bad){trNote(L("SL/TP di sisi yang salah.","SL/TP on the wrong side."),1);trLsig="";return false}
+  var o={};o[k]=price;PE.setStops(a,pSym,o);pLog(a,{symbol:pSym,status:"stops",type:k.toUpperCase(),note:k.toUpperCase()+" @ "+price});pSave();pSig="";trPSig="";trLsig="";return true}
+function trDragEnd(){
+  if(!trDrag)return;var d=trDrag;trDrag=null;
+  try{trCh.applyOptions({handleScroll:true,handleScale:true})}catch(e){}
+  if(d.price>0)trApplyLevel(d.l.k,d.price);else trLsig=""}
+function trStopsFromEntry(){
+  var a=trAcc(),p=a&&a.positions[pSym];if(!p||a.status!=="active")return;var had=!!(p.sl&&p.tp);
+  if(!p.sl)trApplyLevel("sl",pDefStop(p,"sl"));if(!p.tp)trApplyLevel("tp",pDefStop(p,"tp"));
+  trNote(had?L("Geser garis SL/TP untuk mengubah.","Drag the SL/TP lines to change them."):L("SL/TP dipasang. Geser garisnya untuk atur.","SL/TP added. Drag the lines to adjust."))}
+function trBindDrag(el){
+  var KD={sl:1,tp:1},KE={entry:1};
+  el.addEventListener("pointerdown",function(e){
+    if(!trCs||trTool!=="cross")return;var tol=e.pointerType==="touch"?22:12,hit=trNear(e.clientY,KD,tol);
+    if(hit){trDrag={l:hit,price:0};trCh.applyOptions({handleScroll:false,handleScale:false});try{el.setPointerCapture(e.pointerId)}catch(x){}e.preventDefault();return}
+    trTapE=trNear(e.clientY,KE,tol)?{x:e.clientX,y:e.clientY,t:Date.now()}:null},true);
+  el.addEventListener("pointermove",function(e){
+    if(trDrag){var v=trCs.coordinateToPrice(e.clientY-el.getBoundingClientRect().top);
+      if(v>0){var a=trAcc(),p=a&&a.positions[pSym];trDrag.price=pRound(v);trDrag.l.t=p?pStopLbl(trDrag.l.k,p,trDrag.price):trDrag.l.k.toUpperCase();trDrag.l.h.applyOptions({price:trDrag.price,title:trDrag.l.t})}
+      e.preventDefault();return}
+    if(trTapE&&(Math.abs(e.clientX-trTapE.x)>8||Math.abs(e.clientY-trTapE.y)>8))trTapE=null},true);
+  el.addEventListener("pointerup",function(){
+    if(trDrag){trDragEnd();return}
+    var t=trTapE;trTapE=null;if(t&&Date.now()-t.t<600)trStopsFromEntry()},true);
+  el.addEventListener("pointercancel",function(){trTapE=null;trDragEnd()},true);
+  el.addEventListener("touchmove",function(e){if(trDrag)e.preventDefault()},{passive:false})}
 function trPt(e){
   var ov=$("trOv"),r=ov.getBoundingClientRect(),last=trCD[trCD.length-1];if(!trCh||!trCs||!last)return null;
   var time=trCh.timeScale().coordinateToTime(e.clientX-r.left)||last[0]/1e3,price=trCs.coordinateToPrice(e.clientY-r.top);if(price==null)return null;
@@ -1646,9 +1682,9 @@ function trRender(){
     if(sig!==trPSig){trPSig=sig;
       var hist=PE.ledger(a).trades.slice(0,15);
       $("trP_pos").innerHTML=(Object.keys(a.positions).map(function(k){var p=a.positions[k],dc=PDEC[k]||2;
-        return'<div class="trcard"><div class="trrw"><b>'+esc(pBase(k))+' <span class="'+(p.side==="long"?"pup":"pdn")+'">'+p.side.toUpperCase()+" "+p.lev+'x</span></b><b data-tp="'+k+'"></b></div><div class="trmu">'+p.qty+" @ "+p.entry.toFixed(dc)+" | Margin $"+f2(p.qty*p.entry/p.lev)+'<br>SL '+(p.sl||"-")+" | TP "+(p.tp||"-")+'</div>'+(on?'<div class="trbtns"><button type="button" data-trc="stops" data-s="'+k+'">SL/TP</button><button type="button" data-trc="close" data-s="'+k+'">'+L("Tutup","Close")+'</button></div>':"")+'</div>'}).join("")||'<p class="trmu">'+L("Belum ada posisi.","No open positions.")+'</p>')
+        return'<div class="trcard"><div class="trrw"><b>'+esc(pBase(k))+' <span class="'+(p.side==="long"?"pup":"pdn")+'">'+p.side.toUpperCase()+" "+p.lev+'x</span></b><span class="trrw" style="gap:8px"><b data-tp="'+k+'"></b><button type="button" class="trshr" data-trc="card" data-s="'+k+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div><div class="trmu">'+p.qty+" @ "+p.entry.toFixed(dc)+" | Margin $"+f2(p.qty*p.entry/p.lev)+'<br>SL '+(p.sl||"-")+" | TP "+(p.tp||"-")+'</div>'+(on?'<div class="trbtns"><button type="button" data-trc="stops" data-s="'+k+'">SL/TP</button><button type="button" data-trc="close" data-s="'+k+'">'+L("Tutup","Close")+'</button></div>':"")+'</div>'}).join("")||'<p class="trmu">'+L("Belum ada posisi.","No open positions.")+'</p>')
       +a.orders.map(function(o){return'<div class="trcard trrw"><span>'+esc(pBase(o.symbol))+" Limit "+o.side.toUpperCase()+" "+o.qty+" @ "+o.price+'</span><button type="button" data-trc="cancel" data-id="'+o.id+'" class="trbtns" style="margin:0;padding:6px 12px;border:1px solid var(--ln);border-radius:999px">'+L("Batal","Cancel")+'</button></div>'}).join("")
-      +'<h4>'+L("Riwayat trade","Trade history")+'</h4>'+(hist.map(function(r){return'<div class="trrw trmu" style="padding:5px 0"><span>'+esc(pBase(r.s))+" "+(r.d==="BUY"?"LONG":"SHORT")+(r.w?" "+r.w.toUpperCase():"")+'</span><span class="'+pc(r.p)+'">'+pm(r.p)+'</span></div>'}).join("")||'<p class="trmu">'+L("Belum ada trade tertutup.","No closed trades yet.")+'</p>');
+      +'<h4>'+L("Riwayat trade","Trade history")+'</h4>'+(hist.map(function(r,j){return'<div class="trrw trmu" style="padding:4px 0"><span>'+esc(pBase(r.s))+" "+(r.d==="BUY"?"LONG":"SHORT")+(r.w?" "+r.w.toUpperCase():"")+'</span><span class="trrw" style="gap:8px"><span class="'+pc(r.p)+'">'+pm(r.p)+'</span><button type="button" class="trshr" data-trc="tcard" data-j="'+j+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div>'}).join("")||'<p class="trmu">'+L("Belum ada trade tertutup.","No closed trades yet.")+'</p>');
     }
     document.querySelectorAll("#trP_pos [data-tp]").forEach(function(e){var z=s&&s.positions.filter(function(p){return p.symbol===e.getAttribute("data-tp")})[0];e.textContent=z?pm(z.upnl):"-";e.className=z?pc(z.upnl):""});
   }else if(trTab==="acc"){
@@ -1727,6 +1763,8 @@ function trClick(e){
   if(d.pct){var s=pReady(a)?PE.snapshot(a,BK):null,px=trPxNow(),lv=+$("trLev").value||10;if(!s||!(px>0))return;var st=QSTEP[pSym],q=Math.floor(s.freeMargin*lv*(+d.pct/100)*.99/px/st)*st;$("trQ").value=q>0?Math.round(q*1e8)/1e8:"";trSum();return}
   if(d.trc&&a){
     var sym=d.s,p=a.positions[sym];
+    if(d.trc==="card"&&p){pCardPos(a,p);return}
+    if(d.trc==="tcard"){pCardTrade(a,PE.ledger(a).trades[+d.j]);return}
     if(d.trc==="close"&&p){var r=PE.placeOrder(a,{symbol:sym,side:p.side==="long"?"sell":"buy",type:"market",qty:p.qty,reduceOnly:true},BK,PCFG,Date.now());
       if(r.ok)pLog(a,{symbol:sym,side:p.side==="long"?"sell":"buy",type:"market",qty:p.qty,price:r.price,status:"filled"});
       pSave();pSig="";trPSig="";trNote(r.ok?L("Posisi ditutup @ ","Closed @ ")+f2(r.price):perr(r.error),!r.ok);trRender();return}
