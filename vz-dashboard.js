@@ -545,6 +545,7 @@ function L(i,e){return lang==="en"?e:i}
 function f2(n){return Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
 function isPerp(a){return /perp/i.test(String(a&&a.program||""))}
 function notPerp(a){return !isPerp(a)}
+function pmu(v){return(v>0?"+":v<0?"-":"")+f2(Math.abs(v))+" USDT"}
 function pc(v){return v>0?"pup":v<0?"pdn":""}
 /* --- dual login: satu akun, dua produk --- */
 function modeLinks(){return'<a href="#" data-pm="cfd" aria-pressed="'+(PM==="cfd")+'">CFD</a><a href="#" data-pm="perp" aria-pressed="'+(PM==="perp")+'">Perps</a>'}
@@ -599,7 +600,7 @@ function perpHome(){
   pLoadAll();pConnect();pLoadInfo();pSync();
   var a=selP!==null?PERPS[selP]:null;if(a)return perpDetail(a);
   var x=modeSw()+'<p class="lg-demo">'+L("Mode uji: harga langsung dari Bybit, tetapi akun dan posisi hanya tersimpan di browser ini dan hanya berjalan saat halaman terbuka.","Test mode: live Bybit prices, but accounts and positions are stored in this browser only and run only while this page is open.")+'</p>';
-  x+=PERPS.map(function(c,i){var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+'</small></div><div class="acc-r">'+(br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+"$"+f2(Math.abs(pf))+'</strong>')+'<small>Balance $'+f2(c.balance)+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
+  x+=PERPS.map(function(c,i){var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+'</small></div><div class="acc-r">'+(br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+""+f2(Math.abs(pf))+" USDT"+'</strong>')+'<small>Balance '+f2(c.balance)+" USDT"+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
   x+='<div class="lg-card"><b>'+L("Buat akun uji","Create a test account")+'</b><p>'+L("Aturan: daily drawdown 4%, max drawdown 8%, target 10%.","Rules: 4% daily drawdown, 8% max drawdown, 10% target.")+'</p><div class="pchips">'+PSIZES.map(function(s){return'<button type="button" class="pchip" data-pa="new" data-size="'+s+'">'+kfmt(s)+'</button>'}).join("")+'</div></div>';
   return x}
 function ticket(a){
@@ -637,7 +638,7 @@ function pTrHtml(a){
   var tr=PE.ledger(a).trades;if(!tr.length)return'<p>'+L("Belum ada trade tertutup.","No closed trades yet.")+'</p>';
   var why={sl:"SL",tp:"TP",liq:L("Likuidasi","Liquidated")};
   return tr.slice(0,pTrN).map(function(r,j){var d=PDEC[r.s]||2,nt=r.v*r.o,roe=nt>0?r.p/(r.l>0?nt/r.l:nt)*100:0,lg=r.d==="BUY";
-    return'<div class="pos"><div><b>'+esc(pBase(r.s))+'</b><span class="tg-b '+(lg?"pup":"pdn")+'">'+(lg?"LONG":"SHORT")+(r.l?" "+r.l+"x":"")+'</span>'+(r.w?'<span class="tg-b">'+why[r.w]+'</span>':"")+'<small>'+r.v+" | "+L("Masuk ","Entry ")+(+r.o).toFixed(d)+" > "+L("Keluar ","Exit ")+(+r.c).toFixed(d)+'</small><small>'+pHM(new Date(String(r.t)+"Z").getTime())+' UTC</small></div><div class="pr"><strong class="'+pc(r.p)+'">'+pm(r.p)+'</strong><small class="'+pc(r.p)+'">'+(roe>0?"+":"")+roe.toFixed(2)+'%'+(r.l?" ROE":"")+'</small><button type="button" class="pchip pcard" data-pa="tcard" data-j="'+j+'">PnL Card</button></div></div>'}).join("")
+    return'<div class="pos"><div><b>'+esc(pBase(r.s))+'</b><span class="tg-b '+(lg?"pup":"pdn")+'">'+(lg?"LONG":"SHORT")+(r.l?" "+r.l+"x":"")+'</span>'+(r.w?'<span class="tg-b">'+why[r.w]+'</span>':"")+'<small>'+r.v+" | "+L("Masuk ","Entry ")+(+r.o).toFixed(d)+" > "+L("Keluar ","Exit ")+(+r.c).toFixed(d)+'</small><small>'+pHM(new Date(String(r.t)+"Z").getTime())+' UTC</small></div><div class="pr"><strong class="'+pc(r.p)+'">'+pmu(r.p)+'</strong><small class="'+pc(r.p)+'">'+(roe>0?"+":"")+roe.toFixed(2)+'%'+(r.l?" ROE":"")+'</small><button type="button" class="pchip pcard" data-pa="tcard" data-j="'+j+'">PnL Card</button></div></div>'}).join("")
   +(tr.length>pTrN?'<button type="button" class="more" data-pa="trmore">'+L("Tampilkan lagi","Show more")+'</button>':"")}
 function pOrHtml(a){
   var lg=(a.log||[]).slice().reverse();if(!lg.length)return'<p>'+L("Belum ada riwayat order.","No order history yet.")+'</p>';
@@ -671,22 +672,22 @@ function pForm(){
 function pSum(){
   var e=$("pSum");if(!e)return;var q=parseFloat($("pQty").value),b=BK[pSym],lev=+$("pLev").value||10,px=pType==="limit"?parseFloat($("pPx").value):(b?(pSide==="buy"?b.ask:b.bid):0);
   if(!(q>0)||!(px>0)){e.textContent="";return}
-  var nt=q*px;e.textContent=L("Nilai","Notional")+" $"+f2(nt)+" | Margin $"+f2(nt/lev)+" | Fee ~ $"+f2(nt*PCFG.takerFee)}
+  var nt=q*px;e.textContent=L("Nilai","Notional")+" "+f2(nt)+" USDT"+" | Margin "+f2(nt/lev)+" USDT"+" | Fee ~ "+f2(nt*PCFG.takerFee)+" USDT"}
 function pLive(){
   var a=selP!==null?PERPS[selP]:null,hd=$("pHead");if(!a||!hd)return;
   var n=Date.now(),b=BK[pSym],tk=TK[pSym]||{},d=PDEC[pSym],rd=pReady(a),s=rd?PE.snapshot(a,BK):null,on=a.status==="active",eq=s?s.equity:a.balance,pf=eq-a.size,tg=a.size*PTARGET/100,live=n-pLastMsg<5000;
   hd.innerHTML='<div class="dtop"><div><b>'+esc(a.program)+" "+kfmt(a.size)+'</b><p>ID '+esc(a.id)+'</p></div><span class="tag'+(on?"":" kyc-rejected")+'">'+(on?(pf>=tg?L("Target tercapai","Target hit"):L("Aktif","Active")):"Breached")+'</span></div>'
-  +'<div class="pbig">$'+f2(eq)+'</div><p class="'+pc(pf)+'">'+(pf<0?"-":"+")+"$"+f2(Math.abs(pf))+" ("+(pf/a.size*100).toFixed(2)+'%)</p>'
-  +'<div class="grid"><div><small>Balance</small><strong>$'+f2(a.balance)+'</strong></div><div><small>Unrealized</small><strong class="'+(s?pc(s.unrealized):"")+'">'+(s?pm(s.unrealized):"-")+'</strong></div><div><small>'+L("Margin terpakai","Used margin")+'</small><strong>$'+f2(s?s.usedMargin:PE.usedMargin(a))+'</strong></div><div><small>'+L("Margin bebas","Free margin")+'</small><strong>'+(s?"$"+f2(s.freeMargin):"-")+'</strong></div></div>';
+  +'<div class="pbig">'+f2(eq)+" USDT"+'</div><p class="'+pc(pf)+'">'+(pf<0?"-":"+")+""+f2(Math.abs(pf))+" USDT"+" ("+(pf/a.size*100).toFixed(2)+'%)</p>'
+  +'<div class="grid"><div><small>Balance</small><strong>'+f2(a.balance)+" USDT"+'</strong></div><div><small>Unrealized</small><strong class="'+(s?pc(s.unrealized):"")+'">'+(s?pmu(s.unrealized):"-")+'</strong></div><div><small>'+L("Margin terpakai","Used margin")+'</small><strong>'+f2(s?s.usedMargin:PE.usedMargin(a))+" USDT"+'</strong></div><div><small>'+L("Margin bebas","Free margin")+'</small><strong>'+(s?""+f2(s.freeMargin)+" USDT":"-")+'</strong></div></div>';
   var fr=tk.fundingRate,nf=+tk.nextFundingTime-n,mk=+tk.markPrice,ch=tk.price24hPcnt;
   $("pQ").innerHTML=b?'<span>Bid <b>'+b.bid.toFixed(d)+'</b></span><span>Ask <b>'+b.ask.toFixed(d)+'</b></span><span>Mark <b>'+(mk>0?mk.toFixed(d):"-")+'</b></span><span>24h <b class="'+pc(+ch)+'">'+(ch!==undefined&&isFinite(+ch)?(ch*100).toFixed(2)+"%":"-")+'</b></span><span>Max lev <b>'+pLevMax(pSym)+'x</b></span><span>Funding <b>'+(fr!==undefined&&isFinite(+fr)?(fr*100).toFixed(4)+"%":"-")+(nf>0&&nf<864e5?" / "+new Date(nf).toISOString().substr(11,8):"")+'</b></span>'+(live?"":'<span class="pdn">'+L("Feed terputus","Feed disconnected")+'</span>'):L("Menghubungkan ke Bybit...","Connecting to Bybit...");
-  $("pRisk").innerHTML='<b>Risk</b>'+(s?row("Daily drawdown ("+a.rules.dailyDd+"%)","$"+f2(s.dailyLoss)+" / $"+f2(s.dailyLimit),s.dailyLoss/s.dailyLimit*100)+row("Max drawdown ("+a.rules.maxDd+"%)","$"+f2(s.maxLoss)+" / $"+f2(s.maxLimit),s.maxLoss/s.maxLimit*100)+row("Target ("+PTARGET+"%)","$"+f2(Math.max(pf,0))+" / $"+f2(tg),pf/tg*100)+'<p class="acc-hint">Fee $'+f2(a.fees)+' | Funding '+pm(a.funding)+'</p>':'<p>'+L("Menunggu harga...","Waiting for prices...")+'</p>')+(on?"":'<p class="pdn">'+breachMsg(a)+'</p>');
+  $("pRisk").innerHTML='<b>Risk</b>'+(s?row("Daily drawdown ("+a.rules.dailyDd+"%)",""+f2(s.dailyLoss)+" USDT"+" / "+f2(s.dailyLimit)+" USDT",s.dailyLoss/s.dailyLimit*100)+row("Max drawdown ("+a.rules.maxDd+"%)",""+f2(s.maxLoss)+" USDT"+" / "+f2(s.maxLimit)+" USDT",s.maxLoss/s.maxLimit*100)+row("Target ("+PTARGET+"%)",""+f2(Math.max(pf,0))+" USDT"+" / "+f2(tg)+" USDT",pf/tg*100)+'<p class="acc-hint">Fee '+f2(a.fees)+" USDT"+' | Funding '+pmu(a.funding)+'</p>':'<p>'+L("Menunggu harga...","Waiting for prices...")+'</p>')+(on?"":'<p class="pdn">'+breachMsg(a)+'</p>');
   var sig=JSON.stringify([a.positions,a.orders,on]);
   if(sig!==pSig){pSig=sig;
-    $("pPos").innerHTML=Object.keys(a.positions).map(function(k){var p=a.positions[k],dc=PDEC[k]||2;return'<div class="pos"><div><b>'+k.replace("USDT","")+'</b><span class="tg-b '+(p.side==="long"?"pup":"pdn")+'">'+p.side.toUpperCase()+" "+p.lev+'x</span><small>'+p.qty+" @ "+p.entry.toFixed(dc)+" | Margin $"+f2(p.qty*p.entry/p.lev)+'</small><small>SL '+(p.sl||"-")+" | TP "+(p.tp||"-")+'</small></div><div class="pr"><strong data-pu="'+k+'"></strong><div>'+(on?'<button type="button" class="pchip" data-pa="stops" data-s="'+k+'">SL/TP</button> <button type="button" class="pchip" data-pa="close" data-s="'+k+'">'+L("Tutup","Close")+'</button> ':"")+'<button type="button" class="pchip pcard" data-pa="card" data-s="'+k+'">PnL Card</button></div></div></div>'}).join("")||'<p>'+L("Belum ada posisi.","No open positions.")+'</p>';
+    $("pPos").innerHTML=Object.keys(a.positions).map(function(k){var p=a.positions[k],dc=PDEC[k]||2;return'<div class="pos"><div><b>'+k.replace("USDT","")+'</b><span class="tg-b '+(p.side==="long"?"pup":"pdn")+'">'+p.side.toUpperCase()+" "+p.lev+'x</span><small>'+p.qty+" @ "+p.entry.toFixed(dc)+" | Margin "+f2(p.qty*p.entry/p.lev)+" USDT"+'</small><small>SL '+(p.sl||"-")+" | TP "+(p.tp||"-")+'</small></div><div class="pr"><strong data-pu="'+k+'"></strong><div>'+(on?'<button type="button" class="pchip" data-pa="stops" data-s="'+k+'">SL/TP</button> <button type="button" class="pchip" data-pa="close" data-s="'+k+'">'+L("Tutup","Close")+'</button> ':"")+'<button type="button" class="pchip pcard" data-pa="card" data-s="'+k+'">PnL Card</button></div></div></div>'}).join("")||'<p>'+L("Belum ada posisi.","No open positions.")+'</p>';
     pTabsUI(a);pHintUI();
     $("pOrd").innerHTML=a.orders.map(function(o){return'<div class="pos"><div><b>'+o.symbol.replace("USDT","")+'</b><span class="tg-b">Limit '+o.side.toUpperCase()+(o.reduceOnly?" RO":"")+'</span><small>'+o.qty+" @ "+o.price+'</small></div><div class="pr"><button type="button" class="pchip" data-pa="cancel" data-id="'+o.id+'">'+L("Batal","Cancel")+'</button></div></div>'}).join("")||'<p>'+L("Tidak ada order terbuka.","No open orders.")+'</p>'}
-  document.querySelectorAll("[data-pu]").forEach(function(e){var k=e.getAttribute("data-pu"),z=s&&s.positions.filter(function(p){return p.symbol===k})[0];e.textContent=z?pm(z.upnl):"-";e.className=z?pc(z.upnl):""});
+  document.querySelectorAll("[data-pu]").forEach(function(e){var k=e.getAttribute("data-pu"),z=s&&s.positions.filter(function(p){return p.symbol===k})[0];e.textContent=z?pmu(z.upnl):"-";e.className=z?pc(z.upnl):""});
   var hk=a.trades.length+":"+a.status+":"+(a.log||[]).length+":"+pTrN+":"+pOrN;
   if(hk!==pHk){pHk=hk;var lg=PE.ledger(a);$("pHist").innerHTML=statsCard({stats:lg.stats})+calCard({pnl:lg.pnl});
     var th=$("pTH");if(th)th.innerHTML=pTrHtml(a);var oh=$("pOH");if(oh)oh.innerHTML=pOrHtml(a)}
@@ -750,7 +751,7 @@ function pSyncLines(){
   dn=cs.getPropertyValue("--dn").trim()||"#F6465D",up=cs.getPropertyValue("--up").trim()||"#2EBD85",ac=cs.getPropertyValue("--accent").trim()||"#FFB43A";
   if(p){
     var px=b?(p.side==="long"?b.bid:b.ask):0,u=px?pPnlAt(p,px):null;
-    it.push({k:"entry",price:p.entry,color:ac,style:0,title:p.side.toUpperCase()+" "+p.lev+"x | "+(u===null?"-":pm(u))+((p.sl||p.tp)?"":" | tap = SL/TP")});
+    it.push({k:"entry",price:p.entry,color:ac,style:0,title:p.side.toUpperCase()+" "+p.lev+"x | "+(u===null?"-":pmu(u))+((p.sl||p.tp)?"":" | tap = SL/TP")});
     if(p.sl>0)it.push({k:"sl",price:p.sl,color:dn,style:2,title:pStopLbl("sl",p,p.sl)});
     if(p.tp>0)it.push({k:"tp",price:p.tp,color:up,style:2,title:pStopLbl("tp",p,p.tp)})
   }else if($("pTk")){
@@ -814,7 +815,7 @@ var pEdit=false,pEditT=null,pTapE=null;
 function pEditSet(on){pEdit=!!on;clearTimeout(pEditT);if(pEdit)pEditT=setTimeout(function(){pEdit=false;pHintUI()},25000);pHintUI()}
 function pStopLbl(k,p,price){
   var u=pPnlAt(p,price),mg=p.qty*p.entry/(p.lev||1),roe=mg>0?u/mg*100:0;
-  return(k==="sl"?"SL ":"TP ")+pm(u)+" ("+(roe>0?"+":"")+roe.toFixed(1)+"%)"}
+  return(k==="sl"?"SL ":"TP ")+pmu(u)+" ("+(roe>0?"+":"")+roe.toFixed(1)+"%)"}
 function pDragTitle(k,price){
   var a=selP!==null?PERPS[selP]:null,p=a&&a.positions[pSym];
   return p?pStopLbl(k,p,price):(k==="sl"?"SL":"TP")}
@@ -847,12 +848,12 @@ var PCARDIMG={green:"data:image/webp;base64,UklGRqxvAABXRUJQVlA4IKBvAADQZAKdASoA
 function pCardImg(k,cb){
   var i=pCardI[k];if(i&&i.complete&&i.naturalWidth){cb(i);return}
   i=new Image();pCardI[k]=i;i.onload=function(){cb(i)};i.onerror=function(){cb(null)};i.src=PCARDIMG[k]}
-function pCardSize(n){n=Math.abs(n);return n>=1e6?"$"+(n/1e6).toFixed(2).replace(/\.?0+$/,"")+"M":n>=1e3?"$"+(n/1e3).toFixed(1).replace(/\.0$/,"")+"K":"$"+n.toFixed(2)}
+function pCardSize(n){n=Math.abs(n);return(n>=1e6?(n/1e6).toFixed(2).replace(/\.?0+$/,"")+"M":n>=1e3?(n/1e3).toFixed(1).replace(/\.0$/,"")+"K":n.toFixed(2))+" USDT"}
 function pFit(g,txt,tpl,maxW,px,min){while(px>min){g.font=tpl.replace("{px}",px);if(g.measureText(txt).width<=maxW)break;px-=2}g.font=tpl.replace("{px}",px);return px}
 function pDrawCard(cv,o,img){
   var W=1024,H=1536,g=cv.getContext("2d",{willReadFrequently:true}),win=o.pnl>=0,F='"Inter","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif',sc=img?img.naturalWidth/W:1,
   Lo=win?{dy:352,by:405,bh:160,fs:150,r:[614,664,716]}:{dy:350,by:386,bh:132,fs:122,r:[553,605,656]},
-  pn=(o.pnl>=0?"+":"-")+"$"+f2(Math.abs(o.pnl)),rt=(Math.abs(o.ret)<.005?"":o.ret>0?"+":"-")+Math.abs(o.ret).toFixed(2)+"%";
+  pn=(o.pnl>=0?"+":"-")+""+f2(Math.abs(o.pnl))+" USDT",rt=(Math.abs(o.ret)<.005?"":o.ret>0?"+":"-")+Math.abs(o.ret).toFixed(2)+"%";
   cv.width=W;cv.height=H;
   if(img)g.drawImage(img,0,0,W,H);
   else{var bg=g.createLinearGradient(0,0,W,H);bg.addColorStop(0,win?"#06150A":"#120505");bg.addColorStop(1,win?"#2F7A14":"#5A0B0B");g.fillStyle=bg;g.fillRect(0,0,W,H);
@@ -869,7 +870,7 @@ function pDrawCard(cv,o,img){
   g.fillStyle="#070A06";g.textAlign="center";pFit(g,pn,"800 {px}px "+F,734-56,Lo.fs,48);g.fillText(pn,449,Lo.by+Lo.bh/2+4);
   g.textAlign="right";
   g.font="600 38px "+F;g.fillStyle=win?"#9CF54A":"#FF5A5A";g.fillText(rt,800,Lo.r[0]);
-  g.fillStyle="#fff";g.fillText(pCardSize(o.size),800,Lo.r[1]);g.fillText(o.win==null?"-":Math.round(o.win)+"%",800,Lo.r[2]);
+  g.fillStyle="#fff";var szT=pCardSize(o.size);pFit(g,szT,"600 {px}px "+F,320,38,22);g.fillText(szT,800,Lo.r[1]);g.font="600 38px "+F;g.fillText(o.win==null?"-":Math.round(o.win)+"%",800,Lo.r[2]);
   if(win){
     var cx=123,cy=1428,r=49;g.save();g.beginPath();g.arc(cx,cy,r,0,7);g.clip();
     if(img)g.drawImage(img,325*sc,800*sc,440*sc,440*sc,cx-r,cy-r,2*r,2*r);g.restore();
@@ -1492,7 +1493,7 @@ document.addEventListener("visibilitychange",function(){
   if(!document.hidden&&user&&ACC_API&&accState==="ok"&&view==="home"&&!refreshing&&liveAny()&&Date.now()-lastSync>=AUTO_MS)refreshAccounts(false);
 });
 /* ===== TRADE: terminal layar penuh ala futures (dibuka dari tombol Trade Now) ===== */
-var TRS={type:"candle",col:"wr",vol:true,grid:true,magnet:false,lock:false,hide:false};
+var TRS={un:"coin",type:"candle",col:"wr",vol:true,grid:true,magnet:false,lock:false,hide:false};
 try{var _ts=JSON.parse(localStorage.getItem("vzTr.set")||"{}");for(var _tk in _ts)TRS[_tk]=_ts[_tk]}catch(e){}
 var TRV=null,trCh=null,trCs=null,trVs=null,trCD=[],trKey="",trTool="cross",trDR=[],trTmp=null,trRul=null,trTab="chart",trLines=[],trLsig="",trTimer=null,trAt=0,trBkAt=0,trFail=0,trTy="market",trSd="buy",trRaf=false,trPSig="",trNoteT=null,trDrag=null,trTapE=null;
 var TRCSS='#vzTr{position:fixed;inset:0;z-index:300;background:#000;color:#eaecef;display:none;flex-direction:column;font:14px system-ui,-apple-system,sans-serif;padding-top:env(safe-area-inset-top);--up:#2EBD85;--dn:#F6465D;--mu:#848e9c;--ln:#23262d;--sf:#0e1013}'
@@ -1517,7 +1518,7 @@ var TRCSS='#vzTr{position:fixed;inset:0;z-index:300;background:#000;color:#eaece
 +'.trrow{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--ln)}.trtg{width:44px!important;height:24px;border-radius:12px;background:var(--ln)!important;position:relative}.trtg:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}.trtg.on{background:var(--up)!important}.trtg.on:after{left:23px}'
 +'.trpk{display:flex;align-items:center;gap:8px;width:100%;padding:10px 0!important;border-bottom:1px solid var(--ln)!important}.trpk span:first-child{flex:1;text-align:left;font-weight:700}'
 +'#trNote{position:absolute;left:12px;right:12px;bottom:130px;background:#1c2026;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;display:none;z-index:6}'
-+'.trhide,#pTk{display:none!important}.trbtnwrap{margin:0 0 12px}.trbtnwrap .lg-btn{width:100%}.trshr{width:28px;height:28px;display:inline-flex!important;align-items:center;justify-content:center;border:1px solid var(--ln)!important;border-radius:8px;color:var(--mu)}';
++'.trhide,#pTk{display:none!important}.trbtnwrap{margin:0 0 12px}.trbtnwrap .lg-btn{width:100%}.trlb{color:var(--mu);margin-bottom:10px}.trshr{width:28px;height:28px;display:inline-flex!important;align-items:center;justify-content:center;border:1px solid var(--ln)!important;border-radius:8px;color:var(--mu)}';
 (function(){var st=document.createElement("style");st.textContent=TRCSS;document.head.appendChild(st)})();
 function trSet(){try{localStorage.setItem("vzTr.set",JSON.stringify(TRS))}catch(e){}}
 function trDrSave(){try{localStorage.setItem("vzTr.dr:"+pSym,JSON.stringify(trDR))}catch(e){}}
@@ -1609,7 +1610,7 @@ function trTick(){
 function trSyncLines(a){
   if(!trCs||trDrag)return;var p=a.positions[pSym],b=BK[pSym],it=[];
   if(p){var px=b?(p.side==="long"?b.bid:b.ask):0,u=px?(p.side==="long"?px-p.entry:p.entry-px)*p.qty:null;
-    it.push({k:"entry",price:p.entry,color:"#FFB43A",st:0,title:p.side.toUpperCase()+" "+p.lev+"x | "+(u===null?"-":pm(u))+((p.sl||p.tp)?"":" | tap = SL/TP")});
+    it.push({k:"entry",price:p.entry,color:"#FFB43A",st:0,title:p.side.toUpperCase()+" "+p.lev+"x | "+(u===null?"-":pmu(u))+((p.sl||p.tp)?"":" | tap = SL/TP")});
     if(p.sl>0)it.push({k:"sl",price:p.sl,color:"#F6465D",st:2,title:pStopLbl("sl",p,p.sl)});if(p.tp>0)it.push({k:"tp",price:p.tp,color:"#2EBD85",st:2,title:pStopLbl("tp",p,p.tp)})}
   a.orders.forEach(function(o){if(o.symbol===pSym)it.push({k:"o"+o.id,price:o.price,color:"#4C8DFF",st:1,title:"LIMIT "+(o.side==="buy"?"LONG":"SHORT")})});
   var sig=JSON.stringify(it.map(function(i){return[i.k,i.price,i.color,i.st]}));
@@ -1682,16 +1683,16 @@ function trRender(){
     if(sig!==trPSig){trPSig=sig;
       var hist=PE.ledger(a).trades.slice(0,15);
       $("trP_pos").innerHTML=(Object.keys(a.positions).map(function(k){var p=a.positions[k],dc=PDEC[k]||2;
-        return'<div class="trcard"><div class="trrw"><b>'+esc(pBase(k))+' <span class="'+(p.side==="long"?"pup":"pdn")+'">'+p.side.toUpperCase()+" "+p.lev+'x</span></b><span class="trrw" style="gap:8px"><b data-tp="'+k+'"></b><button type="button" class="trshr" data-trc="card" data-s="'+k+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div><div class="trmu">'+p.qty+" @ "+p.entry.toFixed(dc)+" | Margin $"+f2(p.qty*p.entry/p.lev)+'<br>SL '+(p.sl||"-")+" | TP "+(p.tp||"-")+'</div>'+(on?'<div class="trbtns"><button type="button" data-trc="stops" data-s="'+k+'">SL/TP</button><button type="button" data-trc="close" data-s="'+k+'">'+L("Tutup","Close")+'</button></div>':"")+'</div>'}).join("")||'<p class="trmu">'+L("Belum ada posisi.","No open positions.")+'</p>')
+        return'<div class="trcard"><div class="trrw"><b>'+esc(pBase(k))+' <span class="'+(p.side==="long"?"pup":"pdn")+'">'+p.side.toUpperCase()+" "+p.lev+'x</span></b><span class="trrw" style="gap:8px"><b data-tp="'+k+'"></b><button type="button" class="trshr" data-trc="card" data-s="'+k+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div><div class="trmu">'+p.qty+" @ "+p.entry.toFixed(dc)+" | Margin "+f2(p.qty*p.entry/p.lev)+" USDT"+'<br>SL '+(p.sl||"-")+" | TP "+(p.tp||"-")+'</div>'+(on?'<div class="trbtns"><button type="button" data-trc="stops" data-s="'+k+'">SL/TP</button><button type="button" data-trc="close" data-s="'+k+'">'+L("Tutup","Close")+'</button></div>':"")+'</div>'}).join("")||'<p class="trmu">'+L("Belum ada posisi.","No open positions.")+'</p>')
       +a.orders.map(function(o){return'<div class="trcard trrw"><span>'+esc(pBase(o.symbol))+" Limit "+o.side.toUpperCase()+" "+o.qty+" @ "+o.price+'</span><button type="button" data-trc="cancel" data-id="'+o.id+'" class="trbtns" style="margin:0;padding:6px 12px;border:1px solid var(--ln);border-radius:999px">'+L("Batal","Cancel")+'</button></div>'}).join("")
-      +'<h4>'+L("Riwayat trade","Trade history")+'</h4>'+(hist.map(function(r,j){return'<div class="trrw trmu" style="padding:4px 0"><span>'+esc(pBase(r.s))+" "+(r.d==="BUY"?"LONG":"SHORT")+(r.w?" "+r.w.toUpperCase():"")+'</span><span class="trrw" style="gap:8px"><span class="'+pc(r.p)+'">'+pm(r.p)+'</span><button type="button" class="trshr" data-trc="tcard" data-j="'+j+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div>'}).join("")||'<p class="trmu">'+L("Belum ada trade tertutup.","No closed trades yet.")+'</p>');
+      +'<h4>'+L("Riwayat trade","Trade history")+'</h4>'+(hist.map(function(r,j){return'<div class="trrw trmu" style="padding:4px 0"><span>'+esc(pBase(r.s))+" "+(r.d==="BUY"?"LONG":"SHORT")+(r.w?" "+r.w.toUpperCase():"")+'</span><span class="trrw" style="gap:8px"><span class="'+pc(r.p)+'">'+pmu(r.p)+'</span><button type="button" class="trshr" data-trc="tcard" data-j="'+j+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div>'}).join("")||'<p class="trmu">'+L("Belum ada trade tertutup.","No closed trades yet.")+'</p>');
     }
-    document.querySelectorAll("#trP_pos [data-tp]").forEach(function(e){var z=s&&s.positions.filter(function(p){return p.symbol===e.getAttribute("data-tp")})[0];e.textContent=z?pm(z.upnl):"-";e.className=z?pc(z.upnl):""});
+    document.querySelectorAll("#trP_pos [data-tp]").forEach(function(e){var z=s&&s.positions.filter(function(p){return p.symbol===e.getAttribute("data-tp")})[0];e.textContent=z?pmu(z.upnl):"-";e.className=z?pc(z.upnl):""});
   }else if(trTab==="acc"){
     var eq=s?s.equity:a.balance,pf=eq-a.size,tg=a.size*PTARGET/100;
-    $("trP_acc").innerHTML='<div class="trcard"><div class="trmu">'+esc(a.program)+" "+kfmt(a.size)+" | ID "+esc(a.id)+'</div><div class="trbig">$'+f2(eq)+'</div><div class="'+pc(pf)+'">'+(pf<0?"-":"+")+"$"+f2(Math.abs(pf))+" ("+(pf/a.size*100).toFixed(2)+'%)</div>'
-    +'<div class="trg2"><div><small>Balance</small>$'+f2(a.balance)+'</div><div><small>Unrealized</small>'+(s?pm(s.unrealized):"-")+'</div><div><small>'+L("Margin terpakai","Used margin")+'</small>$'+f2(s?s.usedMargin:PE.usedMargin(a))+'</div><div><small>'+L("Margin bebas","Free margin")+'</small>'+(s?"$"+f2(s.freeMargin):"-")+'</div></div></div>'
-    +'<div class="trcard"><b>Risk</b>'+(s?trRow("Daily drawdown ("+a.rules.dailyDd+"%)","$"+f2(s.dailyLoss)+" / $"+f2(s.dailyLimit),s.dailyLoss/s.dailyLimit*100)+trRow("Max drawdown ("+a.rules.maxDd+"%)","$"+f2(s.maxLoss)+" / $"+f2(s.maxLimit),s.maxLoss/s.maxLimit*100)+trRow("Target ("+PTARGET+"%)","$"+f2(Math.max(pf,0))+" / $"+f2(tg),pf/tg*100)+'<p class="trmu">Fee $'+f2(a.fees)+" | Funding "+pm(a.funding)+'</p>':'<p class="trmu">'+L("Menunggu harga...","Waiting for prices...")+'</p>')+(on?"":'<p class="pdn">'+breachMsg(a)+'</p>')+'</div>';
+    $("trP_acc").innerHTML='<div class="trcard"><div class="trmu">'+esc(a.program)+" "+kfmt(a.size)+" | ID "+esc(a.id)+'</div><div class="trbig">'+f2(eq)+" USDT"+'</div><div class="'+pc(pf)+'">'+(pf<0?"-":"+")+""+f2(Math.abs(pf))+" USDT"+" ("+(pf/a.size*100).toFixed(2)+'%)</div>'
+    +'<div class="trg2"><div><small>Balance</small>'+f2(a.balance)+" USDT"+'</div><div><small>Unrealized</small>'+(s?pmu(s.unrealized):"-")+'</div><div><small>'+L("Margin terpakai","Used margin")+'</small>'+f2(s?s.usedMargin:PE.usedMargin(a))+" USDT"+'</div><div><small>'+L("Margin bebas","Free margin")+'</small>'+(s?""+f2(s.freeMargin)+" USDT":"-")+'</div></div></div>'
+    +'<div class="trcard"><b>Risk</b>'+(s?trRow("Daily drawdown ("+a.rules.dailyDd+"%)",""+f2(s.dailyLoss)+" USDT"+" / "+f2(s.dailyLimit)+" USDT",s.dailyLoss/s.dailyLimit*100)+trRow("Max drawdown ("+a.rules.maxDd+"%)",""+f2(s.maxLoss)+" USDT"+" / "+f2(s.maxLimit)+" USDT",s.maxLoss/s.maxLimit*100)+trRow("Target ("+PTARGET+"%)",""+f2(Math.max(pf,0))+" USDT"+" / "+f2(tg)+" USDT",pf/tg*100)+'<p class="trmu">Fee '+f2(a.fees)+" USDT"+" | Funding "+pmu(a.funding)+'</p>':'<p class="trmu">'+L("Menunggu harga...","Waiting for prices...")+'</p>')+(on?"":'<p class="pdn">'+breachMsg(a)+'</p>')+'</div>';
   }
 }
 function trBook(){
@@ -1705,18 +1706,20 @@ function trTicket(sd){
   var mx=pLevMax(pSym),lk=!!a.positions[pSym],lev=Math.min(a.lev[pSym]||PCFG.defaultLev,mx),st=QSTEP[pSym],mq=PMINQ[pSym]||st,bs=esc(pBase(pSym));
   trSheet('<h3 class="'+(sd==="buy"?"pup":"pdn")+'">'+(sd==="buy"?"Long ":"Short ")+bs+'</h3><div class="trseg" id="trTy"><button type="button" data-ty="market" class="on">Market</button><button type="button" data-ty="limit">Limit</button></div>'
   +'<label>Leverage <b id="trLv" style="color:#eaecef">'+lev+'x</b>'+(lk?' <small>('+L("terkunci, ada posisi","locked, position open")+')</small>':"")+'<input id="trLev" type="range" min="1" max="'+mx+'" value="'+lev+'"'+(lk?" disabled":"")+'></label>'
-  +'<label>'+L("Jumlah","Size")+' ('+bs+')<input id="trQ" type="number" inputmode="decimal" min="'+mq+'" step="'+st+'" placeholder="'+mq+'"></label><div class="trch">'+[25,50,75,100].map(function(p){return'<button type="button" data-pct="'+p+'">'+p+'%</button>'}).join("")+'</div>'
+  +'<div class="trlb"><div class="trrw"><span>'+L("Jumlah","Size")+'</span><div class="trseg" id="trUn" style="margin:0 0 6px"><button type="button" data-un="coin" class="'+(TRS.un==="usdt"?"":"on")+'">'+bs+'</button><button type="button" data-un="usdt" class="'+(TRS.un==="usdt"?"on":"")+'">USDT</button></div></div><input id="trQ" type="number" inputmode="decimal" min="0" step="any" placeholder="'+(TRS.un==="usdt"?"0.00":mq)+'"></div>'+'<div class="trch">'+[25,50,75,100].map(function(p){return'<button type="button" data-pct="'+p+'">'+p+'%</button>'}).join("")+'</div>'
   +'<label id="trPxL" style="display:none">'+L("Harga limit","Limit price")+'<input id="trPx2" type="number" inputmode="decimal" step="any"></label>'
   +'<div class="trr2"><label>Stop loss<input id="trSl" type="number" inputmode="decimal" step="any"></label><label>Take profit<input id="trTp" type="number" inputmode="decimal" step="any"></label></div>'
   +'<label style="display:flex;gap:8px;align-items:center"><input id="trRo" type="checkbox">Reduce-only</label><p class="trmu" id="trSum"></p><p class="pdn" id="trMsg"></p><button type="button" class="trgo '+(sd==="buy"?"trbl":"trbs")+'" id="trGo">'+(sd==="buy"?"Long ":"Short ")+bs+'</button>');
   ["trQ","trLev","trPx2"].forEach(function(i){$(i).oninput=trSum});trSum();
 }
 function trPxNow(){var b=BK[pSym];if(trTy==="limit")return parseFloat($("trPx2").value)||0;return b?(trSd==="buy"?b.ask:b.bid):0}
-function trSum(){var q=parseFloat($("trQ").value),lv=+$("trLev").value||10,px=trPxNow();$("trLv").textContent=lv+"x";var e=$("trSum");if(!(q>0)||!(px>0)){e.textContent="";return}var nt=q*px;e.textContent=L("Nilai","Notional")+" $"+f2(nt)+" | Margin $"+f2(nt/lv)+" | Fee ~ $"+f2(nt*PCFG.takerFee)}
+function trQty(){var v=parseFloat($("trQ").value);if(!(v>0))return 0;if(TRS.un==="usdt"){var px=trPxNow();return px>0?v/px:0}return v}
+function trQRound(q){var st=QSTEP[pSym];return Math.round(Math.floor(q/st+1e-9)*st*1e8)/1e8}
+function trSum(){var lv=+$("trLev").value||10,px=trPxNow(),q=trQRound(trQty());$("trLv").textContent=lv+"x";var e=$("trSum");if(!(q>0)||!(px>0)){e.textContent="";return}var nt=q*px;e.textContent=(TRS.un==="usdt"?"\u2248 "+q+" "+pBase(pSym)+" | ":"")+L("Nilai","Notional")+" "+f2(nt)+" USDT | Margin "+f2(nt/lv)+" USDT | Fee ~ "+f2(nt*PCFG.takerFee)+" USDT"}
 function trSubmit(){
   var a=trAcc(),m=$("trMsg"),bad=function(s){m.textContent=s};if(!a)return;
-  var st=QSTEP[pSym],q=Math.round(Math.floor(parseFloat($("trQ").value)/st+1e-9)*st*1e8)/1e8,mnq=PMINQ[pSym]||st,b=BK[pSym],n=Date.now(),long=trSd==="buy";
-  if(!(q>=mnq-1e-12))return bad(L("Isi jumlah minimal ","Enter at least ")+mnq);
+  var st=QSTEP[pSym],q=trQRound(trQty()),mnq=PMINQ[pSym]||st,b=BK[pSym],n=Date.now(),long=trSd==="buy";
+  if(!(q>=mnq-1e-12))return bad(L("Isi jumlah minimal ","Enter at least ")+mnq+" "+pBase(pSym)+(trPxNow()>0?" (\u2248 "+f2(mnq*trPxNow())+" USDT)":""));
   if(!b||n-pLastMsg>5000)return bad(L("Harga belum live. Tunggu koneksi Bybit.","Price feed is not live. Wait for Bybit."));
   var o={symbol:pSym,side:trSd,type:trTy,qty:q,reduceOnly:$("trRo").checked},sl=parseFloat($("trSl").value),tp=parseFloat($("trTp").value);
   if(trTy==="limit"){o.price=parseFloat($("trPx2").value);if(!(o.price>0))return bad(L("Isi harga limit.","Enter a limit price."))}
@@ -1759,8 +1762,11 @@ function trClick(e){
   if(d.k&&d.v){TRS[d.k]=d.v;trSet();trMk();trSettings();return}
   if(d.cat){pCatSel=d.cat;document.querySelectorAll("#trSb [data-cat]").forEach(function(x){x.classList.toggle("on",x.dataset.cat===pCatSel)});trList();return}
   if(d.ps){pSym=d.ps;trShut();trDrLoad();trRul=null;trKey="";trCD=[];trHead();pSync();trLoadCD();$("trPx").textContent="-";$("trChg").textContent="";return}
+  if(d.un){if(d.un===TRS.un)return;var px0=trPxNow(),v0=parseFloat($("trQ").value);
+    if(v0>0&&px0>0){$("trQ").value=d.un==="usdt"?Math.round(v0*px0*100)/100:trQRound(v0/px0)}
+    TRS.un=d.un;trSet();document.querySelectorAll("#trUn button").forEach(function(x){x.classList.toggle("on",x===b)});$("trQ").placeholder=d.un==="usdt"?"0.00":(PMINQ[pSym]||QSTEP[pSym]);trSum();return}
   if(d.ty){trTy=d.ty;document.querySelectorAll("#trTy button").forEach(function(x){x.classList.toggle("on",x===b)});$("trPxL").style.display=trTy==="limit"?"block":"none";trSum();return}
-  if(d.pct){var s=pReady(a)?PE.snapshot(a,BK):null,px=trPxNow(),lv=+$("trLev").value||10;if(!s||!(px>0))return;var st=QSTEP[pSym],q=Math.floor(s.freeMargin*lv*(+d.pct/100)*.99/px/st)*st;$("trQ").value=q>0?Math.round(q*1e8)/1e8:"";trSum();return}
+  if(d.pct){var s=pReady(a)?PE.snapshot(a,BK):null,px=trPxNow(),lv=+$("trLev").value||10;if(!s||!(px>0))return;var N=s.freeMargin*lv*(+d.pct/100)*.99;if(TRS.un==="usdt")$("trQ").value=N>=.01?Math.floor(N*100)/100:"";else{var st=QSTEP[pSym],q=Math.floor(N/px/st)*st;$("trQ").value=q>0?Math.round(q*1e8)/1e8:""}trSum();return}
   if(d.trc&&a){
     var sym=d.s,p=a.positions[sym];
     if(d.trc==="card"&&p){pCardPos(a,p);return}
