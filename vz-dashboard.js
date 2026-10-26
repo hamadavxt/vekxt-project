@@ -283,7 +283,7 @@ function applyFill(acc, symbol, side, qty, price, maker, cfg, reduceOnly, now) {
     pos.feePaid = r8((pos.feePaid || 0) - share);
     acc.balance = r8(acc.balance + gross);
     acc.realized = r8(acc.realized + gross);
-    acc.trades.push({ at: now, s: symbol, d: pos.side === "long" ? "BUY" : "SELL", v: r8(cq), o: pos.entry, c: price, l: pos.lev, w: CLOSE_WHY || undefined, p: r8(gross - closeFee - share) });
+    acc.trades.push({ at: now, s: symbol, d: pos.side === "long" ? "BUY" : "SELL", v: r8(cq), o: pos.entry, c: price, l: pos.lev, w: CLOSE_WHY || undefined, p: r8(gross - closeFee - share), g: r8(gross), f: r8(closeFee + share), ot: pos.since || undefined });
     if (acc.trades.length > 1000) acc.trades.shift();
     fee += closeFee;
     pos.qty = r8(pos.qty - cq);
@@ -300,7 +300,7 @@ function applyFill(acc, symbol, side, qty, price, maker, cfg, reduceOnly, now) {
       cur.qty = r8(cur.qty + rest);
       cur.feePaid = r8((cur.feePaid || 0) + openFee);
     } else {
-      acc.positions[symbol] = { symbol, side: buy ? "long" : "short", qty: r8(rest), entry: price, lev: acc.lev[symbol] || cfg.defaultLev, sl: null, tp: null, feePaid: r8(openFee) };
+      acc.positions[symbol] = { symbol, side: buy ? "long" : "short", qty: r8(rest), entry: price, lev: acc.lev[symbol] || cfg.defaultLev, sl: null, tp: null, feePaid: r8(openFee), since: now };
     }
     if (!acc.firstOpen) acc.firstOpen = utcDay(now);
     ev.push({ type: "open", symbol, side: buy ? "long" : "short", qty: r8(rest), price });
@@ -478,7 +478,7 @@ function ledger(acc) {
     best: tr.length ? r2(Math.max(...tr.map((x) => x.p))) : 0, worst: tr.length ? r2(Math.min(...tr.map((x) => x.p))) : 0,
     net: r2(tr.reduce((a, x) => a + x.p, 0)),
   };
-  const recent = tr.slice(-200).reverse().map((x) => ({ t: new Date(x.at).toISOString().slice(0, 19), s: x.s, d: x.d, v: x.v, o: x.o, c: x.c, l: x.l, w: x.w, p: r2(x.p) }));
+  const recent = tr.slice(-200).reverse().map((x) => ({ t: new Date(x.at).toISOString().slice(0, 19), s: x.s, d: x.d, v: x.v, o: x.o, c: x.c, l: x.l, w: x.w, p: r2(x.p), g: x.g, f: x.f, ot: x.ot }));
   return { pnl, days: days.size, firstEntry: acc.firstOpen || undefined, stats, trades: recent };
 }
 
@@ -1488,7 +1488,7 @@ document.addEventListener("visibilitychange",function(){
 /* ===== TRADE: terminal layar penuh ala futures (dibuka dari tombol Trade Now) ===== */
 var TRS={ind:[],un:"coin",type:"candle",col:"wr",vol:true,grid:true,magnet:false,lock:false,hide:false};
 try{var _ts=JSON.parse(localStorage.getItem("vzTr.set")||"{}");for(var _tk in _ts)TRS[_tk]=_ts[_tk]}catch(e){}
-var TRV=null,trCh=null,trCs=null,trVs=null,trCD=[],trKey="",trTool="cross",trDR=[],trTmp=null,trRul=null,trTab="chart",trLines=[],trLsig="",trTimer=null,trAt=0,trBkAt=0,trFail=0,trTy="market",trSd="buy",trRaf=false,trPSig="",trNoteT=null,trDrag=null,trTapE=null,trDrag2=null,trInd=[],trNew={t:"sma",c:"#FFB43A"},TRCOL=["#FFB43A","#4C8DFF","#E040FB","#2EBD85","#F6465D","#FFFFFF"];
+var TRV=null,trCh=null,trCs=null,trVs=null,trCD=[],trKey="",trTool="cross",trDR=[],trTmp=null,trRul=null,trTab="chart",trLines=[],trLsig="",trTimer=null,trAt=0,trBkAt=0,trFail=0,trTy="market",trSd="buy",trRaf=false,trPSig="",trNoteT=null,trDrag=null,trTapE=null,trDrag2=null,trInd=[],trNew={t:"sma",c:"#FFB43A"},TRCOL=["#FFB43A","#4C8DFF","#E040FB","#2EBD85","#F6465D","#FFFFFF"],trHx={},trHn=10;
 var TRCSS='#vzTr{position:fixed;inset:0;z-index:300;background:#000;color:#eaecef;display:none;flex-direction:column;font:14px system-ui,-apple-system,sans-serif;padding-top:env(safe-area-inset-top);--up:#2EBD85;--dn:#F6465D;--mu:#848e9c;--ln:#23262d;--sf:#0e1013}'
 +'#vzTr *{box-sizing:border-box}#vzTr button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0}'
 +'.trhd{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--ln)}.trhd>#trX,.trhd>#trGear{width:46px;height:46px;display:flex!important;align-items:center;justify-content:center;font-size:22px;padding:0!important;flex:none;touch-action:manipulation;border-radius:12px}.trhd>#trX{margin-left:-8px}.trhd>#trX:active,.trhd>#trGear:active{background:var(--sf)!important}.trg{flex:1}'
@@ -1511,7 +1511,7 @@ var TRCSS='#vzTr{position:fixed;inset:0;z-index:300;background:#000;color:#eaece
 +'.trrow{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--ln)}.trtg{width:44px!important;height:24px;border-radius:12px;background:var(--ln)!important;position:relative}.trtg:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}.trtg.on{background:var(--up)!important}.trtg.on:after{left:23px}'
 +'.trpk{display:flex;align-items:center;gap:8px;width:100%;padding:10px 0!important;border-bottom:1px solid var(--ln)!important}.trpk>span:first-child{flex:1;display:flex;align-items:center;text-align:left;font-weight:700}'
 +'#trNote{position:absolute;left:12px;right:12px;bottom:130px;background:#1c2026;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;display:none;z-index:6}'
-+'html[data-theme="light"] #pTerm .lg-card{--surface:#050505;--ink:#FFF7EA;--muted:#B8A98F;--line:#3A2A14;--accent:#FFB43A;--accent-ink:#2B1600;color:#FFF7EA}#pTerm .lg-card{background:#050505!important;background-image:none!important;border:1px solid #1f2226!important;box-shadow:none!important}#pEq .eqh{display:flex;justify-content:space-between;align-items:center;gap:8px}#pEq .eqs{display:flex;background:#111;border:1px solid #1f2226;border-radius:10px;padding:3px}#pEq .eqs button{background:none;border:0;color:#8b8f97;font:inherit;font-weight:600;padding:5px 12px;border-radius:8px;cursor:pointer}#pEq .eqs button.on{background:#1b1e22;color:#fff}#pEq svg{width:100%;height:auto;display:block;touch-action:pan-y;margin-top:6px}#pEq text{fill:#7d8590;font-size:10px}#pEqTip{font-size:12px;margin-top:8px;color:#9aa0a6;min-height:18px}#pEq .eqlg{display:flex;justify-content:center;gap:18px;color:#9aa0a6;font-size:12px;margin-top:4px}#pEq .eqlg i{display:inline-block;width:14px;height:2px;margin-right:6px;vertical-align:middle}#pEq .eqlg i.ds{background:none;border-top:2px dashed #6b7078;height:0}.trhide,#pTk{display:none!important}.trbtnwrap{margin:0 0 12px}.trbtnwrap .lg-btn{width:100%}.trni{display:block;width:22px;height:22px;margin:0 auto 3px;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat}.trico{position:relative;width:24px;height:24px;border-radius:50%;display:inline-flex!important;align-items:center;justify-content:center;flex:none!important;overflow:hidden;vertical-align:middle;margin-right:8px;font-size:9px;font-weight:700}.trico i{font-style:normal;color:#fff}.trico img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}.trico.ok{background:none!important}.trico.ok i{display:none}.trlb{color:var(--mu);margin-bottom:10px}.trshr{width:28px;height:28px;display:inline-flex!important;align-items:center;justify-content:center;border:1px solid var(--ln)!important;border-radius:8px;color:var(--mu)}';
++'html[data-theme="light"] #pTerm .lg-card{--surface:#050505;--ink:#FFF7EA;--muted:#B8A98F;--line:#3A2A14;--accent:#FFB43A;--accent-ink:#2B1600;color:#FFF7EA}#pTerm .lg-card{background:#050505!important;background-image:none!important;border:1px solid #1f2226!important;box-shadow:none!important}#pEq .eqh{display:flex;justify-content:space-between;align-items:center;gap:8px}#pEq .eqs{display:flex;background:#111;border:1px solid #1f2226;border-radius:10px;padding:3px}#pEq .eqs button{background:none;border:0;color:#8b8f97;font:inherit;font-weight:600;padding:5px 12px;border-radius:8px;cursor:pointer}#pEq .eqs button.on{background:#1b1e22;color:#fff}#pEq svg{width:100%;height:auto;display:block;touch-action:pan-y;margin-top:6px}#pEq text{fill:#7d8590;font-size:10px}#pEqTip{font-size:12px;margin-top:8px;color:#9aa0a6;min-height:18px}#pEq .eqlg{display:flex;justify-content:center;gap:18px;color:#9aa0a6;font-size:12px;margin-top:4px}#pEq .eqlg i{display:inline-block;width:14px;height:2px;margin-right:6px;vertical-align:middle}#pEq .eqlg i.ds{background:none;border-top:2px dashed #6b7078;height:0}.trhide,#pTk{display:none!important}.trbtnwrap{margin:0 0 12px}.trbtnwrap .lg-btn{width:100%}.trni{display:block;width:22px;height:22px;margin:0 auto 3px;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat}.trico{position:relative;width:24px;height:24px;border-radius:50%;display:inline-flex!important;align-items:center;justify-content:center;flex:none!important;overflow:hidden;vertical-align:middle;margin-right:8px;font-size:9px;font-weight:700}.trico i{font-style:normal;color:#fff}.trico img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}.trico.ok{background:none!important}.trico.ok i{display:none}.trbd{padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700}.trbd.l{background:rgba(46,189,133,.16);color:#2EBD85}.trbd.s{background:rgba(246,70,93,.16);color:#F6465D}.trhg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 8px;margin-top:12px}.trhg small{display:block;color:var(--mu);font-size:12px}.trhg b{font-size:14px;word-break:break-word}.trhd2{grid-template-columns:1fr 1fr;border-top:1px solid var(--ln);padding-top:12px}.trlb{color:var(--mu);margin-bottom:10px}.trshr{width:28px;height:28px;display:inline-flex!important;align-items:center;justify-content:center;border:1px solid var(--ln)!important;border-radius:8px;color:var(--mu)}';
 (function(){var st=document.createElement("style");st.textContent=TRCSS;document.head.appendChild(st)})();
 function trSet(){try{localStorage.setItem("vzTr.set",JSON.stringify(TRS))}catch(e){}}
 function trDrSave(){try{localStorage.setItem("vzTr.dr:"+pSym,JSON.stringify(trDR))}catch(e){}}
@@ -1800,16 +1800,33 @@ function trDraw(){
       c.fillText((dv>=0?"+":"")+dv.toFixed(dc)+" ("+(dv/d.a.price*100).toFixed(2)+"%) | "+bars+" bar",Math.min(x1,x2)+4,Math.min(y1,y2)-6);c.restore()}
   })}
 function trRow(l,v,p){p=isFinite(p)?Math.max(0,Math.min(100,p)):0;return'<div class="trrw"><span>'+l+'</span><span>'+v+'</span></div><div class="trbar"><i style="width:'+p+'%"></i></div>'}
+function trAgo(ms){var sc=Math.max(0,(Date.now()-ms)/1000);if(sc<60)return L("baru saja","just now");var m=Math.floor(sc/60);if(m<60)return m+(lang==="id"?" menit lalu":"m ago");var h=Math.floor(m/60);if(h<24)return h+(lang==="id"?" jam lalu":"h ago");return Math.floor(h/24)+(lang==="id"?" hari lalu":"d ago")}
+function trDur(ms){if(!(ms>0))return"-";var m=Math.floor(ms/60000);if(m<1)return"<1m";if(m<60)return m+"m";var h=Math.floor(m/60);m%=60;if(h<24)return h+"h"+(m?" "+m+"m":"");var d=Math.floor(h/24);h%=24;return d+"d"+(h?" "+h+"h":"")}
+function trHistHtml(a){
+  var tr=PE.ledger(a).trades,hd='<h4>'+L("Riwayat posisi","Position history")+'</h4>';
+  if(!tr.length)return hd+'<p class="trmu">'+L("Belum ada trade tertutup.","No closed trades yet.")+'</p>';
+  var why={sl:"Stop Loss",tp:"Take Profit",liq:L("Likuidasi","Liquidated")};
+  return hd+tr.slice(0,trHn).map(function(r,j){
+    var dc=PDEC[r.s]||2,lg=r.d==="BUY",ms=Date.parse(String(r.t)+"Z"),gross=r.g!==undefined?r.g:(lg?r.c-r.o:r.o-r.c)*r.v,fee=r.f!==undefined?r.f:Math.max(0,gross-r.p),nt=r.v*r.o,mg=r.l>0?nt/r.l:nt,roe=mg>0?r.p/mg*100:0,key=r.t+r.s,open=!!trHx[key],
+    c=function(l,v,cl){return'<div><small>'+l+'</small><b'+(cl?' class="'+cl+'"':"")+'>'+v+'</b></div>'},ut=function(t){return new Date(t).toISOString().slice(0,16).replace("T"," ")};
+    return'<div class="trcard"><div class="trrw"><span style="display:flex;align-items:center;gap:8px"><b style="display:flex;align-items:center">'+trIco(pBase(r.s))+esc(pBase(r.s))+'</b><span class="trbd '+(lg?"l":"s")+'">'+(lg?"Long":"Short")+(r.l?" "+r.l+"x":"")+'</span></span>'
+    +'<span class="trrw trmu" style="gap:8px">'+(isFinite(ms)?trAgo(ms):"")+'<button type="button" class="trshr" data-trc="tcard" data-j="'+j+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div>'
+    +'<div class="trhg">'+c(L("Ukuran posisi","Position Size"),r.v)+c(L("Harga masuk rata-rata","Avg Entry Price"),(+r.o).toFixed(dc))+c(L("Harga keluar rata-rata","Avg Exit Price"),(+r.c).toFixed(dc))
+    +c("Net PnL",pmu(r.p),pc(r.p))+c("Gross PnL",pmu(gross),pc(gross))+c(L("Total fee","Total Fees"),f2(fee)+" USDT")
+    +c(L("Durasi","Duration"),r.ot&&isFinite(ms)?trDur(ms-r.ot):"-")+c("ROE",(roe>0?"+":"")+roe.toFixed(2)+"%",pc(roe))+c("Leverage",r.l?r.l+"x":"-")+'</div>'
+    +'<div class="trrw trmu" style="margin-top:10px"><span>'+(r.w?why[r.w]:L("Ditutup manual","Closed manually"))+'</span><button type="button" data-trc="hdet" data-key="'+esc(key)+'" style="color:#eaecef;font-weight:600">'+(open?L("Sembunyikan","Hide details"):L("Lihat detail","Show Details"))+'</button></div>'
+    +(open?'<div class="trhg trhd2">'+c(L("Nilai masuk","Entry value"),f2(nt)+" USDT")+c(L("Nilai keluar","Exit value"),f2(r.v*r.c)+" USDT")+c("Margin",f2(mg)+" USDT")+c(L("Ditutup (UTC)","Closed (UTC)"),isFinite(ms)?ut(ms):"-")+(r.ot?c(L("Dibuka (UTC)","Opened (UTC)"),ut(r.ot)):"")+'</div>':"")+'</div>'}).join("")
+  +(tr.length>trHn?'<button type="button" class="trgo" data-trc="hmore" style="background:var(--ln);color:#eaecef">'+L("Tampilkan lagi","Show more")+'</button>':"")}
 function trRender(){
   var a=trAcc();if(!a)return;var rd=pReady(a),s=rd?PE.snapshot(a,BK):null,on=a.status==="active";
   if(trTab==="pos"){
-    var sig=JSON.stringify([a.positions,a.orders,a.trades.length,on]);
+    var sig=JSON.stringify([a.positions,a.orders,a.trades.length,on,trHx,trHn]);
     if(sig!==trPSig){trPSig=sig;
       var hist=PE.ledger(a).trades.slice(0,15);
       $("trP_pos").innerHTML=(Object.keys(a.positions).map(function(k){var p=a.positions[k],dc=PDEC[k]||2;
         return'<div class="trcard"><div class="trrw"><b style="display:flex;align-items:center">'+trIco(pBase(k))+esc(pBase(k))+'&nbsp;<span class="'+(p.side==="long"?"pup":"pdn")+'">'+p.side.toUpperCase()+" "+p.lev+'x</span></b><span class="trrw" style="gap:8px"><b data-tp="'+k+'"></b><button type="button" class="trshr" data-trc="card" data-s="'+k+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div><div class="trmu">'+p.qty+" @ "+p.entry.toFixed(dc)+" | Margin "+f2(p.qty*p.entry/p.lev)+" USDT"+'<br>SL '+(p.sl||"-")+" | TP "+(p.tp||"-")+'</div>'+(on?'<div class="trbtns"><button type="button" data-trc="stops" data-s="'+k+'">SL/TP</button><button type="button" data-trc="close" data-s="'+k+'">'+L("Tutup","Close")+'</button></div>':"")+'</div>'}).join("")||'<p class="trmu">'+L("Belum ada posisi.","No open positions.")+'</p>')
       +a.orders.map(function(o){return'<div class="trcard trrw"><span>'+esc(pBase(o.symbol))+" Limit "+o.side.toUpperCase()+" "+o.qty+" @ "+o.price+'</span><button type="button" data-trc="cancel" data-id="'+o.id+'" class="trbtns" style="margin:0;padding:6px 12px;border:1px solid var(--ln);border-radius:999px">'+L("Batal","Cancel")+'</button></div>'}).join("")
-      +'<h4>'+L("Riwayat trade","Trade history")+'</h4>'+(hist.map(function(r,j){return'<div class="trrw trmu" style="padding:4px 0"><span>'+esc(pBase(r.s))+" "+(r.d==="BUY"?"LONG":"SHORT")+(r.w?" "+r.w.toUpperCase():"")+'</span><span class="trrw" style="gap:8px"><span class="'+pc(r.p)+'">'+pmu(r.p)+'</span><button type="button" class="trshr" data-trc="tcard" data-j="'+j+'" aria-label="Share PnL">'+TRSHARE+'</button></span></div>'}).join("")||'<p class="trmu">'+L("Belum ada trade tertutup.","No closed trades yet.")+'</p>');
+      +trHistHtml(a);
     }
     document.querySelectorAll("#trP_pos [data-tp]").forEach(function(e){var z=s&&s.positions.filter(function(p){return p.symbol===e.getAttribute("data-tp")})[0];e.textContent=z?pmu(z.upnl):"-";e.className=z?pc(z.upnl):""});
   }else if(trTab==="acc"){
@@ -1899,6 +1916,8 @@ function trClick(e){
   if(d.ty){trTy=d.ty;document.querySelectorAll("#trTy button").forEach(function(x){x.classList.toggle("on",x===b)});$("trPxL").style.display=trTy==="limit"?"block":"none";trSum();return}
   if(d.pct){var s=pReady(a)?PE.snapshot(a,BK):null,px=trPxNow(),lv=+$("trLev").value||10;if(!s||!(px>0))return;var N=s.freeMargin*lv*(+d.pct/100)*.99;if(TRS.un==="usdt")$("trQ").value=N>=.01?Math.floor(N*100)/100:"";else{var st=QSTEP[pSym],q=Math.floor(N/px/st)*st;$("trQ").value=q>0?Math.round(q*1e8)/1e8:""}trSum();return}
   if(d.trc&&a){
+    if(d.trc==="hdet"){if(trHx[d.key])delete trHx[d.key];else trHx[d.key]=1;trPSig="";trRender();return}
+    if(d.trc==="hmore"){trHn+=10;trPSig="";trRender();return}
     var sym=d.s,p=a.positions[sym];
     if(d.trc==="card"&&p){pCardPos(a,p);return}
     if(d.trc==="tcard"){pCardTrade(a,PE.ledger(a).trades[+d.j]);return}
