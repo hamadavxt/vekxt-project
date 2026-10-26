@@ -270,3 +270,168 @@ html[data-mode="perp"] .lg-dash .pmax{border-color:rgba(255,170,60,.7)}
 .lg-dash .pchh .pchip{margin:4px 4px 0 0;padding:3px 9px;font-size:12px}
 .lg-dash .pos .pr small{display:block;font-size:12px}
 .lg-dash .pos .tg-b{white-space:nowrap}
+
+/* =====================================================================
+   ARCTIC CYAN THEME - Perps mode only (html[data-mode="perp"])
+   Presentation-only override. No JS, markup, API, engine or risk changes.
+   Load order: this block must stay LAST in vz-dashboard.css.
+   Tokens: bg #0B1220 | card #111827 | accent #38BDF8 | line #263449
+           text #F1F5F9 | profit #22C55E | loss #F43F5E
+   ===================================================================== */
+
+/* ---- 1. Tokens (dark only; replaces the old orange palette) ---- */
+html:root[data-mode="perp"][data-v]{
+  --bg:#0B1220;--surface:#111827;--ink:#F1F5F9;--muted:#8B9BB4;--line:#263449;
+  --accent:#38BDF8;--accent-ink:#04121C;--glow:transparent;
+  --up:#22C55E;--dn:#F43F5E;--upbg:rgba(34,197,94,.12);--dnbg:rgba(244,63,94,.12);
+  --w:1240px;color-scheme:dark}
+html:root[data-mode="perp"][data-v] body{background:var(--bg);color:var(--ink)}
+html[data-mode="perp"] ::selection{background:rgba(56,189,248,.3)}
+
+/* ---- 2. Flat surfaces: no glow, gradients, blur or shadows ---- */
+html[data-mode="perp"] .lg-dash .lg-card,
+html[data-mode="perp"] .lg-dash .acc,
+html[data-mode="perp"] .lg-box .lg-card,
+html[data-mode="perp"] .lg-box:not(.wide) .lg-card{
+  background:var(--surface);background-image:none;border:1px solid var(--line);
+  border-radius:12px;box-shadow:none;animation:none!important;padding:16px}
+html[data-mode="perp"] .lg-box:not(.wide) .lg-card{border-radius:14px}
+html[data-mode="perp"] .lg-top{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:1px solid var(--line)}
+html[data-mode="perp"] .lg-box.wide{max-width:1240px;--w:1240px}
+html[data-mode="perp"] .lg-lang{border-color:var(--line);border-radius:8px}
+html[data-mode="perp"] .lg-lang button{color:var(--muted)}
+
+/* ---- 3. Buttons / selected controls: cyan, flat ---- */
+html:root[data-mode="perp"] .lg-btn{background:var(--accent);background-image:none;color:var(--accent-ink);
+  border-radius:10px;box-shadow:none;font-weight:700;transition:none}
+html:root[data-mode="perp"] .lg-btn:hover{transform:none;box-shadow:none;filter:brightness(1.08)}
+html:root[data-mode="perp"] .lg-btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+html:root[data-mode="perp"] .lg-btn.ghost:hover{border-color:var(--accent);background:transparent;box-shadow:none}
+html:root[data-mode="perp"] .lg-tabs,html:root[data-mode="perp"] .lg-lang{border-color:var(--line)}
+html:root[data-mode="perp"] .lg-tabs button[aria-pressed="true"],
+html:root[data-mode="perp"] .lg-lang button[aria-pressed="true"],
+html:root[data-mode="perp"] .lg-dash .pchip[aria-pressed="true"]{
+  background:var(--accent);background-image:none;color:var(--accent-ink);border-color:var(--accent)}
+html:root[data-mode="perp"] .lg-dash .pchip{border-color:var(--line);color:var(--ink)}
+html:root[data-mode="perp"] .lg-dash .pa-sl[aria-pressed="true"]{background:var(--dn);color:#fff;border-color:var(--dn)}
+html:root[data-mode="perp"] .lg-dash .pa-tp[aria-pressed="true"]{background:var(--up);color:#04140A;border-color:var(--up)}
+html:root[data-mode="perp"] .lg-dash .pmax{border-color:var(--accent)}
+/* Long / Short keep profit / loss colours (must come after the .lg-btn rule) */
+html:root[data-mode="perp"] .lg-dash .lg-btn.pb-long,
+html:root[data-mode="perp"] .lg-dash .pb-long[aria-pressed="true"]{background:var(--up);color:#04140A;border-color:transparent}
+html:root[data-mode="perp"] .lg-dash .lg-btn.pb-short,
+html:root[data-mode="perp"] .lg-dash .pb-short[aria-pressed="true"]{background:var(--dn);color:#fff;border-color:transparent}
+html[data-mode="perp"] .lg-dash .pb{border-color:var(--line);border-radius:10px}
+
+/* ---- 4. Inputs ---- */
+html[data-mode="perp"] .lg input,html[data-mode="perp"] .lg select,html[data-mode="perp"] .lg textarea,
+html[data-mode="perp"] .lg-dash .pf select,html[data-mode="perp"] .lg-dash .ppick input{
+  background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--ink)}
+html[data-mode="perp"] .lg input:focus,html[data-mode="perp"] .lg select:focus,html[data-mode="perp"] .lg textarea:focus{
+  border-color:var(--accent);box-shadow:none;outline:0}
+html[data-mode="perp"] .lg a:focus-visible,html[data-mode="perp"] .lg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+html[data-mode="perp"] .lg-dash .plev input[type=range]{accent-color:var(--accent)}
+
+/* ---- 5. Navigation: compact top bar on phones, sidebar on desktop ---- */
+html[data-mode="perp"] .lg-dash .dnav{display:flex;gap:4px;padding:3px;margin:0 0 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--surface);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+html[data-mode="perp"] .lg-dash .dnav button{flex:0 0 auto;padding:8px 14px;border-radius:8px;font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap}
+html[data-mode="perp"] .lg-dash .dnav button[aria-pressed="true"]{color:var(--accent-ink)}
+@media (min-width:1024px){
+  html[data-mode="perp"] #dBody{display:grid;grid-template-columns:200px minmax(0,1fr);column-gap:20px;align-items:start}
+  html[data-mode="perp"] #dBody>*{grid-column:2;min-width:0}
+  html[data-mode="perp"] #dBody>.dnav{grid-column:1;grid-row:1/span 40;position:sticky;top:76px;flex-direction:column;
+    overflow:visible;padding:8px;margin:0;gap:2px}
+  html[data-mode="perp"] #dBody>.dnav button{text-align:left;width:100%;padding:11px 12px}
+  html[data-mode="perp"] .lg-dash .dnav button[aria-pressed="false"]:hover{background:rgba(56,189,248,.08);color:var(--ink)}
+}
+
+/* ---- 6. Account summary: equity hero + balance / PnL / margin tiles ---- */
+html[data-mode="perp"] .lg-dash #pHead{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;align-items:stretch}
+html[data-mode="perp"] #pHead>.dtop{grid-column:1/-1;margin-bottom:2px}
+html[data-mode="perp"] #pHead>.pbig,html[data-mode="perp"] #pHead>p{grid-column:1/-1}
+html[data-mode="perp"] #pHead>.pbig{font-size:28px;margin:0}
+html[data-mode="perp"] #pHead>p{margin:0 0 4px;font-weight:600}
+html[data-mode="perp"] #pHead>.grid{display:contents}
+html[data-mode="perp"] #pHead>.grid>div{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+html[data-mode="perp"] #pHead>.grid small{color:var(--muted);font-size:12px;margin-bottom:2px}
+html[data-mode="perp"] #pHead>.grid strong{font-size:15px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+html[data-mode="perp"] .lg-dash .tag{border:1px solid var(--line);background:transparent;color:var(--accent);border-radius:999px}
+html[data-mode="perp"] .lg-dash .tag.kyc-rejected{color:var(--dn);border-color:var(--dn)}
+@media (min-width:820px){
+  html[data-mode="perp"] .lg-dash #pHead{grid-template-columns:minmax(0,1.6fr) repeat(4,minmax(0,1fr))}
+  html[data-mode="perp"] #pHead>.dtop{grid-column:1/-1}
+  html[data-mode="perp"] #pHead>.pbig{grid-column:1;grid-row:2;align-self:end}
+  html[data-mode="perp"] #pHead>p{grid-column:1;grid-row:3;align-self:start}
+  html[data-mode="perp"] #pHead>.grid>div{grid-row:2/span 2}
+}
+
+/* ---- 7. Terminal: chart + order panel ---- */
+html[data-mode="perp"] .lg-dash .pt{gap:12px}
+@media (min-width:820px){html[data-mode="perp"] .lg-dash .pt{grid-template-columns:minmax(0,1fr) 340px}}
+@media (min-width:1024px){html[data-mode="perp"] .lg-dash #pCh{height:440px}}
+html[data-mode="perp"] .lg-dash #pCh{height:300px}
+@media (min-width:600px){html[data-mode="perp"] .lg-dash #pCh{height:380px}}
+html[data-mode="perp"] .lg-dash .pq{gap:4px 14px;color:var(--muted)}
+html[data-mode="perp"] .lg-dash .pq b{color:var(--ink)}
+html[data-mode="perp"] .lg-dash .psym{background:transparent;border:1px solid var(--line);border-radius:10px}
+/* watchlist strip: one scrolling row instead of wrapping chips */
+html[data-mode="perp"] .lg-dash .psel{flex-wrap:nowrap}
+html[data-mode="perp"] .lg-dash .psel .pchips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;flex:1 1 0;min-width:0}
+html[data-mode="perp"] .lg-dash .psel .pchips::-webkit-scrollbar{display:none}
+html[data-mode="perp"] .lg-dash .psel .pchip{white-space:nowrap;flex:0 0 auto}
+html[data-mode="perp"] .lg-dash .ppick{background:var(--bg);border-color:var(--line)}
+html[data-mode="perp"] .lg-dash .prow{border-top-color:var(--line)}
+html[data-mode="perp"] .lg-dash .prow:hover{background:rgba(56,189,248,.07)}
+html[data-mode="perp"] .lg-dash .pf{padding:14px}
+/* risk / drawdown bars */
+html[data-mode="perp"] .lg-dash .bar{background:var(--line);height:6px;border-radius:3px;overflow:hidden}
+html[data-mode="perp"] .lg-dash .bar i{background:var(--accent);border-radius:3px}
+/* positions / trades rows */
+html[data-mode="perp"] .lg-dash .pos,html[data-mode="perp"] .lg-dash .th{border-top-color:var(--line);font-variant-numeric:tabular-nums}
+html[data-mode="perp"] .lg-dash .tg-b{border-color:var(--line);border-radius:6px}
+html[data-mode="perp"] .lg-dash .tg-b.pup{border-color:var(--up)}
+html[data-mode="perp"] .lg-dash .tg-b.pdn{border-color:var(--dn)}
+html[data-mode="perp"] .lg-dash .pc-p{border-color:rgba(34,197,94,.4)}
+html[data-mode="perp"] .lg-dash .pc-n{border-color:rgba(244,63,94,.4)}
+html[data-mode="perp"] .lg-dash .pc-t{outline-color:var(--accent)}
+/* below-the-fold history: skip rendering until scrolled near (helps low-end phones) */
+html[data-mode="perp"] #pHist{content-visibility:auto;contain-intrinsic-size:auto 700px}
+
+/* ---- 8. Equity curve card + chart overrides of the JS-injected dark card ---- */
+html:root[data-mode="perp"] #pTerm .lg-card{--surface:#111827;--ink:#F1F5F9;--muted:#8B9BB4;--line:#263449;
+  --accent:#38BDF8;--accent-ink:#04121C;color:var(--ink)}
+html:root[data-mode="perp"] #pTerm .lg-card{background:var(--surface)!important;border:1px solid var(--line)!important;box-shadow:none!important}
+html:root[data-mode="perp"] #pEq .eqs{background:var(--bg);border-color:var(--line)}
+html:root[data-mode="perp"] #pEq .eqs button{color:var(--muted)}
+html:root[data-mode="perp"] #pEq .eqs button.on{background:var(--accent);color:var(--accent-ink)}
+html:root[data-mode="perp"] #pEq text{fill:var(--muted)}
+html:root[data-mode="perp"] #pEqTip,html:root[data-mode="perp"] #pEq .eqlg{color:var(--muted)}
+
+/* ---- 9. Full-screen mobile trader (#vzTr): same palette ---- */
+html:root[data-mode="perp"] #vzTr{background:var(--bg);color:var(--ink);--up:#22C55E;--dn:#F43F5E;--mu:#8B9BB4;--ln:#263449;--sf:#111827}
+html:root[data-mode="perp"] #vzTr .trch button.on,html:root[data-mode="perp"] #vzTr .trseg button.on{background:var(--accent)!important;color:var(--accent-ink)!important;border-color:var(--accent)!important}
+html:root[data-mode="perp"] #vzTr .trbs{background:var(--dn)!important;color:#fff!important}
+html:root[data-mode="perp"] #vzTr .trbl{color:#04140A}
+html:root[data-mode="perp"] #vzTr .trbar i{background:var(--accent)}
+html:root[data-mode="perp"] #vzTr .trnav button.on{color:var(--accent)}
+html:root[data-mode="perp"] #vzTr .trsb input[type=number],html:root[data-mode="perp"] #vzTr .trsb input[type=search]{background:var(--bg)}
+html:root[data-mode="perp"] #vzTr #trNote{background:var(--surface)}
+html:root[data-mode="perp"] #vzTr .trbd.l{background:var(--upbg);color:var(--up)}
+html:root[data-mode="perp"] #vzTr .trbd.s{background:var(--dnbg);color:var(--dn)}
+
+/* ---- 10. Performance: no decorative motion (spinners for loading stay) ---- */
+html[data-mode="perp"] .vz-anim,html[data-mode="perp"] .vz-anim *,
+html[data-mode="perp"] .lg-dash .sk i{animation:none!important}
+html[data-mode="perp"] .lg-dash *{transition:none}
+html[data-mode="perp"] .lg-dash .rf-btn.spin svg{animation:vzSpin .8s linear infinite!important}
+
+/* ---- 11. Small screens / touch ---- */
+@media (max-width:600px){
+  html[data-mode="perp"] .lg{padding:12px 10px}
+  html[data-mode="perp"] .lg-dash .lg-card{padding:12px}
+  html[data-mode="perp"] .lg-dash .pbig{font-size:26px}
+}
+@media (pointer:coarse){
+  html[data-mode="perp"] .lg-dash .pchip,html[data-mode="perp"] .lg-dash .pb,html[data-mode="perp"] .lg-dash .dnav button{min-height:40px}
+}
