@@ -565,7 +565,7 @@ function pPush(now){
   if(!pFsOn()||pFsState!=="ok")return;
   var n=Date.now();if(!now&&n-pPushT<8000)return;pPushT=n;var ps=[];
   PERPS.forEach(function(a){var t=a._t;delete a._t;var b=JSON.stringify(a);if(pPushed[a.id]===b){if(t)a._t=t;return}a._t=n;ps.push([a.id,b,JSON.stringify(a)])});
-  ps.forEach(function(p){pPushed[p[0]]=p[1];fs.collection("perps").doc(user.uid+"_"+p[0]).set({uid:user.uid,id:p[0],d:p[2],at:firebase.firestore.FieldValue.serverTimestamp()}).catch(function(){delete pPushed[p[0]]})})}
+  ps.forEach(function(p){pPushed[p[0]]=p[1];fs.collection("perps").doc(user.uid+"_"+p[0]).set({uid:user.uid,email:String(user.email||""),id:p[0],d:p[2],at:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}).catch(function(){delete pPushed[p[0]]})})}
 function pRemoteLoad(cb){
   if(!pFsOn()){pFsState="ok";cb();return}
   if(pFsState==="loading")return;pFsState="loading";
@@ -573,7 +573,10 @@ function pRemoteLoad(cb){
     q.forEach(function(doc){var d=doc.data(),a;try{a=JSON.parse(d.d)}catch(e){return}if(!a||!a.id)return;
       var t=a._t;delete a._t;pPushed[a.id]=JSON.stringify(a);if(t)a._t=t;
       var i=-1;PERPS.forEach(function(x,k){if(x.id===a.id)i=k});
-      if(i<0)PERPS.push(a);else if((a._t||0)>(PERPS[i]._t||0))PERPS[i]=a});
+      if(i<0){PERPS.push(a);i=PERPS.length-1}else if((a._t||0)>(PERPS[i]._t||0))PERPS[i]=a;
+      /* perintah admin (field di luar "d", hanya admin yang bisa menulis): funded dan reset breach */
+      var z=PERPS[i];z.funded=!!d.funded;
+      if(d.resetNonce>(z._rn||0)){z._rn=d.resetNonce;if(z.status==="breached"){z.status="active";z.reason=null;z.day={date:new Date().toISOString().slice(0,10),startBal:z.balance}}}});
     pFsState="ok";pSaveLocal();cb()}).catch(function(){pFsState="err";cb()})}
 document.addEventListener("visibilitychange",function(){if(document.hidden)pPush(true)});window.addEventListener("pagehide",function(){pPush(true)});
 function pNew(size,id){var a=PE.newAccount({id:id||("PP-"+Math.floor(10000+Math.random()*90000)),size:size,rules:PRULES});a.program=PPROG;PERPS.push(a);pSave();selP=PERPS.length-1}
@@ -647,8 +650,8 @@ var pBootT=0;
 function perpHome(){
   pLoadAll();pConnect();pLoadInfo();pSync();pBoot();
   var a=selP!==null?PERPS[selP]:null;if(a)return perpDetail(a);
-  var x=modeSw()+'<p class="lg-demo">'+L("Harga langsung dari Bybit. Akun dan posisi disimpan di browser ini dan hanya berjalan saat halaman terbuka.","Live Bybit prices. Accounts and positions are stored in this browser and run only while this page is open.")+'</p>';
-  x+=PERPS.map(function(c,i){var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+'</small></div><div class="acc-r">'+(br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+""+f2(Math.abs(pf))+" USDT"+'</strong>')+'<small>Balance '+f2(c.balance)+" USDT"+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
+  var x=modeSw();
+  x+=PERPS.map(function(c,i){var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+(c.funded?' · Funded':'')+'</small></div><div class="acc-r">'+(br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+""+f2(Math.abs(pf))+" USDT"+'</strong>')+'<small>Balance '+f2(c.balance)+" USDT"+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
   x+=pBuyCard();
   return x}
 function pBuyCard(){
@@ -718,7 +721,7 @@ function perpDetail(a){
   +'<div id="pCh"></div><p class="acc-hint pchh" id="pChH">'+pHint()+'</p></div>'
   +'<div class="lg-card"><div class="pchips ptabs" id="pTabs"></div><div id="pPane_pos"><div id="pPos"></div></div><div id="pPane_ord" hidden><div id="pOrd"></div></div><div id="pPane_oh" hidden><div id="pOH"></div></div><div id="pPane_th" hidden><div id="pTH"></div></div></div>'
   +'</div><div>'+(on?ticket(a):"")+'<div class="lg-card" id="pRisk"></div></div></div><div id="pHist"></div>'
-  +'<button type="button" class="lg-link" data-pa="del">'+L("Hapus akun uji ini","Delete this test account")+'</button></div>';
+  +'</div>';
   return x}
 function pForm(){
   document.querySelectorAll("[data-pa=side]").forEach(function(b){b.setAttribute("aria-pressed",b.getAttribute("data-v")===pSide)});
@@ -996,7 +999,6 @@ function pSubmit(a){
     if(act==="type"){pType=el.getAttribute("data-v");pForm();return}
     if(act==="go"){pSubmit(a);return}
     if(act==="cancel"){var co=a.orders.filter(function(x){return x.id===+el.getAttribute("data-id")})[0];PE.cancelOrder(a,+el.getAttribute("data-id"));if(co)pLog(a,{symbol:co.symbol,side:co.side,type:"limit",qty:co.qty,price:co.price,status:"cancelled"});pSave();pSig="";pLive();return}
-    if(act==="del"){if(confirm(L("Hapus akun uji ini dari browser?","Delete this test account from the browser?"))){PERPS.splice(selP,1);selP=null;pSave();dash()}return}
     var p=a.positions[sym];if(!p)return;
     if(act==="card"){pCardPos(a,p);return}
     if(act==="close"){
