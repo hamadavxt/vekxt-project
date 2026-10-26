@@ -555,9 +555,28 @@ function setMode(m){if(m===PM)return;PM=m;try{localStorage.setItem("vzMode",m)}c
 document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("[data-pm]");if(!a)return;e.preventDefault();setMode(a.getAttribute("data-pm"))});
 /* --- penyimpanan akun uji (browser ini) --- */
 function pKey(){return"vzPerp:"+((user&&(user.uid||user.email))||"x")}
-function pLoadAll(){var k=pKey();if(pKeyLoaded===k)return;pKeyLoaded=k;try{PERPS=JSON.parse(localStorage.getItem(k)||"[]")}catch(e){PERPS=[]}if(!Array.isArray(PERPS))PERPS=[];if(selP!==null&&!PERPS[selP])selP=null}
-function pSave(){pSavedAt=Date.now();try{localStorage.setItem(pKey(),JSON.stringify(PERPS))}catch(e){}}
-function pNew(size){var a=PE.newAccount({id:"PP-"+Math.floor(10000+Math.random()*90000),size:size,rules:PRULES});a.program=PPROG;PERPS.push(a);pSave();selP=PERPS.length-1}
+function pLoadAll(){var k=pKey();if(pKeyLoaded===k)return;pKeyLoaded=k;pBootSt="idle";pFsState="idle";pPushed={};PEN=[];PENst="idle";try{PERPS=JSON.parse(localStorage.getItem(k)||"[]")}catch(e){PERPS=[]}if(!Array.isArray(PERPS))PERPS=[];if(selP!==null&&!PERPS[selP])selP=null}
+function pSaveLocal(){try{localStorage.setItem(pKey(),JSON.stringify(PERPS))}catch(e){}}
+function pSave(){pSavedAt=Date.now();pSaveLocal();pPush(false)}
+/* --- sinkron ke Firebase (Firestore koleksi "perps", satu dokumen per akun: uid_id) --- */
+var pFsState="idle",pPushed={},pPushT=0,pBootSt="idle",pClaiming=false;
+function pFsOn(){return !!(CFG&&fs&&user&&user.uid)}
+function pPush(now){
+  if(!pFsOn()||pFsState!=="ok")return;
+  var n=Date.now();if(!now&&n-pPushT<8000)return;pPushT=n;var ps=[];
+  PERPS.forEach(function(a){var t=a._t;delete a._t;var b=JSON.stringify(a);if(pPushed[a.id]===b){if(t)a._t=t;return}a._t=n;ps.push([a.id,b,JSON.stringify(a)])});
+  ps.forEach(function(p){pPushed[p[0]]=p[1];fs.collection("perps").doc(user.uid+"_"+p[0]).set({uid:user.uid,id:p[0],d:p[2],at:firebase.firestore.FieldValue.serverTimestamp()}).catch(function(){delete pPushed[p[0]]})})}
+function pRemoteLoad(cb){
+  if(!pFsOn()){pFsState="ok";cb();return}
+  if(pFsState==="loading")return;pFsState="loading";
+  fs.collection("perps").where("uid","==",user.uid).get().then(function(q){
+    q.forEach(function(doc){var d=doc.data(),a;try{a=JSON.parse(d.d)}catch(e){return}if(!a||!a.id)return;
+      var t=a._t;delete a._t;pPushed[a.id]=JSON.stringify(a);if(t)a._t=t;
+      var i=-1;PERPS.forEach(function(x,k){if(x.id===a.id)i=k});
+      if(i<0)PERPS.push(a);else if((a._t||0)>(PERPS[i]._t||0))PERPS[i]=a});
+    pFsState="ok";pSaveLocal();cb()}).catch(function(){pFsState="err";cb()})}
+document.addEventListener("visibilitychange",function(){if(document.hidden)pPush(true)});window.addEventListener("pagehide",function(){pPush(true)});
+function pNew(size,id){var a=PE.newAccount({id:id||("PP-"+Math.floor(10000+Math.random()*90000)),size:size,rules:PRULES});a.program=PPROG;PERPS.push(a);pSave();selP=PERPS.length-1}
 /* --- harga Bybit (WebSocket publik, topik tickers: bid1/ask1, mark, funding) --- */
 function pConnect(){
   if(pWs||!window.WebSocket)return;
@@ -596,13 +615,51 @@ function pEvents(a,ev){var m=[];ev.forEach(function(e){
   if(m.length)pNote(a.id+": "+m.join(" | "),1)}
 function breachMsg(a){return a.reason==="liquidation"?L("Akun dilikuidasi.","Account was liquidated."):a.reason==="daily"?t("brD"):t("brM")}
 /* --- tampilan --- */
+/* --- akun Perps yang dibeli: setelah bayar, akun dibuat otomatis dan disimpan di Firebase --- */
+var PEN=[],PENst="idle",PENmsg="",PENsig="";
+function pLoadEnt(force){
+  if(PENst==="loading"||(PENst==="ok"&&!force)||!user)return;PENst="loading";
+  apiPost({action:"perp"},function(d){
+    PEN=Array.isArray(d.entitlements)?d.entitlements:[];PENst="ok";
+    var sg=JSON.stringify(PEN)+PERPS.length;if(sg!==PENsig){PENsig=sg;if(PM==="perp"&&selP===null)dash()}
+    if(pFsState==="ok")pAutoClaim()},
+    function(){PENst="err";if(PM==="perp"&&selP===null)dash()})}
+function pAutoClaim(){
+  var un=PEN.filter(function(e){return e.status==="unused"});if(!un.length||pClaiming)return;
+  pClaiming=true;
+  pClaimOne(un[0].orderId,function(){pClaiming=false;pLoadEnt(true)},function(){pClaiming=false})}
+function pClaimOne(oid,ok,fail){
+  PENmsg="";
+  apiPost({action:"perp_claim",orderId:oid},function(d){
+    if(!(d&&d.ok&&d.accountId)){fail();return}
+    var ex=PERPS.filter(function(x){return x.id===d.accountId})[0];
+    if(!ex){
+      if(d.already){PENmsg=L("Akun ini sudah diaktifkan tetapi datanya tidak ditemukan. Hubungi support.","This account was activated but its data was not found. Contact support.");fail();return}
+      pNew(d.size,d.accountId);pPush(true)}
+    ok()},fail)}
+function pClaim(oid){
+  pClaimOne(oid,function(){pLoadEnt(true);dash()},function(){if(!PENmsg)PENmsg=L("Gagal mengaktifkan akun. Coba lagi.","Could not activate the account. Try again.");dash()})}
+function pBoot(){
+  if(!user||pBootSt!=="idle")return;pBootSt="run";
+  pRemoteLoad(function(){pLoadEnt(true);if(PM==="perp"&&selP===null)dash()});
+  if(!pBootT)pBootT=setInterval(function(){if(!document.hidden&&PM==="perp"&&selP===null&&user&&pFsState!=="loading")pLoadEnt(true)},10000)}
+var pBootT=0;
 function perpHome(){
-  pLoadAll();pConnect();pLoadInfo();pSync();
+  pLoadAll();pConnect();pLoadInfo();pSync();pBoot();
   var a=selP!==null?PERPS[selP]:null;if(a)return perpDetail(a);
-  var x=modeSw()+'<p class="lg-demo">'+L("Mode uji: harga langsung dari Bybit, tetapi akun dan posisi hanya tersimpan di browser ini dan hanya berjalan saat halaman terbuka.","Test mode: live Bybit prices, but accounts and positions are stored in this browser only and run only while this page is open.")+'</p>';
+  var x=modeSw()+'<p class="lg-demo">'+L("Harga langsung dari Bybit. Akun dan posisi disimpan di browser ini dan hanya berjalan saat halaman terbuka.","Live Bybit prices. Accounts and positions are stored in this browser and run only while this page is open.")+'</p>';
   x+=PERPS.map(function(c,i){var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+'</small></div><div class="acc-r">'+(br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+""+f2(Math.abs(pf))+" USDT"+'</strong>')+'<small>Balance '+f2(c.balance)+" USDT"+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
-  x+='<div class="lg-card"><b>'+L("Buat akun uji","Create a test account")+'</b><p>'+L("Aturan: daily drawdown 4%, max drawdown 8%, target 10%.","Rules: 4% daily drawdown, 8% max drawdown, 10% target.")+'</p><div class="pchips">'+PSIZES.map(function(s){return'<button type="button" class="pchip" data-pa="new" data-size="'+s+'">'+kfmt(s)+'</button>'}).join("")+'</div></div>';
+  x+=pBuyCard();
   return x}
+function pBuyCard(){
+  var un=PEN.filter(function(e){return e.status==="unused"});
+  var h='<div class="lg-card"><b>'+L("Akun Perps kamu","Your Perps accounts")+'</b>';
+  if(PENst==="loading"||PENst==="idle")h+='<p class="acc-hint">'+L("Memuat...","Loading...")+'</p>';
+  else if(PENst==="err")h+='<p class="acc-hint pdn">'+L("Gagal memuat pembelian.","Could not load purchases.")+'</p><button type="button" class="lg-btn ghost" data-pa="entreload">'+L("Coba lagi","Retry")+'</button>';
+  else if(!un.length)h+='<p class="acc-hint">'+L("Akun yang kamu beli akan muncul di sini otomatis setelah pembayaran terkonfirmasi (biasanya kurang dari satu menit).","Accounts you buy appear here automatically once payment is confirmed (usually under a minute).")+'</p><a class="lg-btn ghost" href="/p/perpetuals.html">'+L("Beli akun Perps","Buy a Perps account")+'</a>';
+  else h+='<p>'+L("Aturan: daily drawdown 4%, max drawdown 8%, target 10%.","Rules: 4% daily drawdown, 8% max drawdown, 10% target.")+'</p><div class="pchips">'+un.map(function(e){return'<button type="button" class="pchip" data-pa="claim" data-oid="'+esc(e.orderId)+'">'+L("Aktifkan ","Activate ")+kfmt(e.size)+'</button>'}).join("")+'</div>';
+  if(PENmsg)h+='<div class="lg-msg pdn">'+esc(PENmsg)+'</div>';
+  return h+'</div>'}
 function ticket(a){
   var mx=pLevMax(pSym),lev=Math.min(a.lev[pSym]||PCFG.defaultLev,mx),q=QSTEP[pSym],mq=PMINQ[pSym]||q,lk=!!a.positions[pSym];
   var pr=function(k,v,l){return'<button type="button" data-pa="'+k+'" data-v="'+v+'" aria-pressed="false">'+l+'</button>'};
@@ -916,7 +973,8 @@ function pSubmit(a){
     var el=e.target.closest&&e.target.closest("[data-pa]");if(!el)return;
     var act=el.getAttribute("data-pa"),a=selP!==null?PERPS[selP]:null,sym=el.getAttribute("data-s");
     if(act==="open"){selP=+el.getAttribute("data-i");dash();return}
-    if(act==="new"){pNew(+el.getAttribute("data-size"));dash();return}
+    if(act==="claim"){pClaim(el.getAttribute("data-oid"));return}
+    if(act==="entreload"){pLoadEnt(true);return}
     if(act==="back"){selP=null;dash();return}
     if(!a)return;
     if(act==="eqr"){pEqR=el.getAttribute("data-v")||"all";pEqSig="";pEqRender(a);return}
