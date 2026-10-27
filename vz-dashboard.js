@@ -666,7 +666,11 @@ function perpHome(){
   pLoadAll();pConnect();pLoadInfo();pSync();pBoot();
   var a=selP!==null?PERPS[selP]:null;if(a)return perpDetail(a);
   var x=modeSw();
-  x+=PERPS.map(function(c,i){var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+(c.funded?' · Funded':'')+'</small></div><div class="acc-r">'+(c.status==="passed"?'<strong class="up">'+L("Lolos","Passed")+'</strong>':br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+""+f2(Math.abs(pf))+" USDT"+'</strong>')+'<small>Balance '+f2(c.balance)+" USDT"+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
+  var nA=PERPS.filter(function(c){return c.status==="active"}).length,nI=PERPS.length-nA;
+  if(PERPS.length){
+    x+='<div class="lg-tabs" role="group" id="accTabs"><button type="button" data-at="active" aria-pressed="'+(accTab==="active")+'">'+t("tabActive")+' ('+nA+')</button><button type="button" data-at="inactive" aria-pressed="'+(accTab==="inactive")+'">'+t("tabInactive")+' ('+nI+')</button></div>';
+    if(accTab==="inactive"?!nI:!nA)x+='<div class="lg-card"><p>'+t("accTabNone")+'</p></div>'}
+  x+=PERPS.map(function(c,i){if((c.status!=="active")!==(accTab==="inactive"))return"";var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+(c.funded?' · Funded':'')+'</small></div><div class="acc-r">'+(c.status==="passed"?'<strong class="up">'+L("Lolos","Passed")+'</strong>':br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+""+f2(Math.abs(pf))+" USDT"+'</strong>')+'<small>Balance '+f2(c.balance)+" USDT"+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
   x+=pBuyCard();
   return x}
 function pBuyCard(){
