@@ -1166,27 +1166,41 @@ function vtEv(a,ev){ev.forEach(function(e){
 /* ---- candle ---- */
 function vtLw(cb){if(window.LightweightCharts)return cb(true);if(vtLwBusy)return;vtLwBusy=true;var i=0;(function n(){if(i>=LWU.length){vtLwBusy=false;return cb(false)}var s=document.createElement("script");s.src=LWU[i++];s.onload=function(){vtLwBusy=false;cb(true)};s.onerror=n;document.head.appendChild(s)})()}
 function vtTs(v){var x=String(v==null?"":v);if(/^\d{4}-\d\d-\d\dT[\d:.]+$/.test(x))x+="Z";return Date.parse(x)}
-function vtBarsParse(d){var a=vtArr(d);if(!a.length&&d&&typeof d==="object"){for(var k in d)if(Array.isArray(d[k])){a=d[k];break}}
+function vtFindBars(d,n){if(Array.isArray(d))return(d[0]&&typeof d[0]==="object"&&("close" in d[0]||"c" in d[0]))?d:null;if(!d||typeof d!=="object"||n>3)return null;for(var k in d){var r=vtFindBars(d[k],n+1);if(r)return r}return null}
+function vtBarsParse(d){var a=vtFindBars(d,0)||[];
   var o=[];a.forEach(function(b){var t=vtTs(b.openTime||b.time||b.t);if(!(t>0)&&typeof b.time==="number")t=b.time*1000;if(!(t>0))return;o.push({time:Math.floor(t/1000),open:+b.open,high:+b.high,low:+b.low,close:+b.close})});
   o.sort(function(x,y){return x.time-y.time});var r=[];o.forEach(function(b){if(!r.length||r[r.length-1].time!==b.time)r.push(b)});return r}
 /* alamat OHLC Biquote tidak tertulis di docs: dicari otomatis dari spesifikasi Swagger mereka, lalu dicoba beberapa pola umum */
-var VT_TPL=["/api/ohlc/{s}?interval={i}&limit={n}","/api/ohlc?symbol={s}&interval={i}&limit={n}","/api/ohlc/{s}?timeframe={i}&limit={n}","/api/ohlc?symbol={s}&timeframe={i}&limit={n}","/api/ohlc/{s}/{i}?limit={n}","/api/ohlcv/{s}?interval={i}&limit={n}","/api/bars/{s}?interval={i}&limit={n}","/api/history/{s}?interval={i}&limit={n}","/api/chart/{s}?interval={i}&limit={n}","/api/candles/{s}?interval={i}&limit={n}","/api/candles?symbol={s}&interval={i}&limit={n}","/api/ohlc/{s}?tf={i}&limit={n}","/api/ohlc/{s}?period={i}&limit={n}"],vtOhlcFail=0;
-function vtDiscover(cb){
-  var S=["/swagger/v1/swagger.json","/swagger/swagger.json","/swagger.json","/openapi.json"],k=0;
-  (function n(){if(k>=S.length)return cb(null);
-    fetch(BQ+S[k++]).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(sp){
-      var ps=sp.paths||{},key=Object.keys(ps).filter(function(x){return /ohlc|candle/i.test(x)&&ps[x].get})[0];if(!key)throw 0;
+var VT_TPL=["/api/{s}/ohlc?interval={i}&limit={n}","/api/{s}/ohlc?timeframe={i}&limit={n}","/api/{s}/ohlc?tf={i}&limit={n}","/api/{s}/ohlc?interval={i}&count={n}","/api/ohlc/{s}?interval={i}&limit={n}","/api/ohlc?symbol={s}&interval={i}&limit={n}","/api/ohlc/{s}?timeframe={i}&limit={n}","/api/ohlc?symbol={s}&timeframe={i}&limit={n}","/api/ohlc/{s}/{i}?limit={n}","/api/ohlcv/{s}?interval={i}&limit={n}","/api/bars/{s}?interval={i}&limit={n}","/api/history/{s}?interval={i}&limit={n}","/api/chart/{s}?interval={i}&limit={n}","/api/candles/{s}?interval={i}&limit={n}","/api/candles?symbol={s}&interval={i}&limit={n}","/api/ohlc/{s}?tf={i}&limit={n}","/api/ohlc/{s}?period={i}&limit={n}"],vtOhlcFail=0;
+function vtDiscover(cb,nt){
+  var S=["/swagger/v1/swagger.json","/openapi/v1.json","/swagger/swagger.json","/swagger.json","/openapi.json","/v3/api-docs"],k=0,seen="";
+  (function n(){if(k>=S.length){if(nt)nt("spec: "+(seen||"404 semua"));return cb(null)}
+    var u=S[k++];fetch(BQ+u).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(sp){
+      var ps=sp.paths||{},ks=Object.keys(ps),key=ks.filter(function(x){return /ohlc|candle|bar|history|chart/i.test(x)&&ps[x].get})[0];
+      if(!key){seen=u+" ada, tanpa path OHLC; path: "+ks.slice(0,12).join(" ");throw 0}
       var pt=key,q=[];
       (ps[key].get.parameters||[]).forEach(function(p){var nm=p.name||"",role=/symbol|ticker|instrument/i.test(nm)?"{s}":/interval|timeframe|period|resolution|^tf$/i.test(nm)?"{i}":/limit|count|bars|size|take|max/i.test(nm)?"{n}":"";
         if(p.in==="path")pt=pt.replace("{"+nm+"}",role||"{s}");else if(p.in==="query"&&role)q.push(nm+"="+role)});
-      cb(pt+(q.length?"?"+q.join("&"):""))}).catch(n)})()}
+      if(nt)nt("spec "+u+": "+key);cb(pt+(q.length?"?"+q.join("&"):""))}).catch(n)})()}
+/* cadangan: riwayat dari Bybit (perkiraan, digeser mengikuti harga Biquote) untuk simbol yang ada di Bybit */
+var VT_BY={BTCUSD:"BTCUSDT",ETHUSD:"ETHUSDT",XAUUSD:"XAUUSDT",XAGUSD:"XAGUSDT"},VT_BYI=["1","5","15","30","60","240","D"];
+function vtBybit(key,id,tf,cb){
+  var sym=VT_BY[id];if(!sym)return cb(false);
+  fetch("https://api.bybit.com/v5/market/kline?category=linear&symbol="+sym+"&interval="+VT_BYI[tf]+"&limit=500").then(function(r){return r.json()}).then(function(d){
+    var l=d&&d.result&&d.result.list;if(!Array.isArray(l)||!l.length)throw 0;
+    var b=l.map(function(x){return{time:Math.floor(+x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4]}}).sort(function(x,y){return x.time-y.time});
+    var m=VBK[id],off=0;if(m&&!m.ph&&m.mid>0){off=m.mid-b[b.length-1].close;if(Math.abs(off)/m.mid>0.02)off=0}
+    if(off)b=b.map(function(x){return{time:x.time,open:x.open+off,high:x.high+off,low:x.low+off,close:x.close+off}});
+    if(vtBarKey!==key)return cb(true);vtBars=b;if(vtCs){vtCs.setData(b);vtCh.timeScale().fitContent()}cb(true)}).catch(function(){cb(false)})}
 function vtLoadBars(){
   var i=VIX[VT.sym],tf=VTF[VT.tf],key=VT.sym+"|"+VT.tf;vtBarKey=key;vtBars=[];if(vtCs)vtCs.setData([]);
   var bq=i&&(i.bq||i.a[0]),fm=[tf[0],tf[1],String(tf[2]/60)],diag=[],dead={};
   var note=function(x){if(diag.indexOf(x)<0)diag.push(x)};
   var run=function(list){
     var k=0;(function nx(){
-      if(k>=list.length){vtOhlcFail=Date.now();vtPaintNote(L("Riwayat candle belum bisa dimuat","Candle history unavailable")+": "+diag.slice(0,7).join(" · ")+" — "+L("candle terbentuk dari harga live.","candles build from live prices."));return}
+      if(k>=list.length){vtBybit(key,VT.sym,VT.tf,function(ok){
+        if(ok){vtPaintNote(L("Riwayat candle dari Bybit (perkiraan).","Candle history from Bybit (approximate)."));return}
+        vtOhlcFail=Date.now();vtPaintNote(L("Riwayat candle belum bisa dimuat","Candle history unavailable")+": "+diag.slice(0,8).join(" · ")+" — "+L("candle terbentuk dari harga live.","candles build from live prices."))});return}
       var c=list[k++],path=c.t.split("?")[0];if(dead[path])return nx();
       var u=BQ+c.t.replace("{s}",encodeURIComponent(bq)).replace("{i}",encodeURIComponent(fm[c.f])).replace("{n}","500");
       fetch(u).then(function(r){
@@ -1200,7 +1214,7 @@ function vtLoadBars(){
   var st=[];VT_TPL.forEach(function(t){[0,1,2].forEach(function(f){st.push({t:t,f:f})})});
   if(saved&&saved.t){run([saved].concat(st));return}
   if(vtOhlcFail&&Date.now()-vtOhlcFail<60000){vtPaintNote(L("Riwayat candle belum bisa dimuat. Buka Trade lagi 1 menit lagi.","Candle history unavailable. Reopen Trade in a minute."));return}
-  vtDiscover(function(tpl){var l=[];if(tpl)[0,1,2].forEach(function(f){l.push({t:tpl,f:f})});run(l.concat(st))})}
+  vtDiscover(function(tpl){var l=[];if(tpl)[0,1,2].forEach(function(f){l.push({t:tpl,f:f})});run(l.concat(st))},note)}
 function vtChart(){return vtCh}
 function vtCandle(id,p,ts){
   if(!VT.on||VT.tab!=="trade"||id!==VT.sym||!vtCs||vtBarKey!==VT.sym+"|"+VT.tf)return;
