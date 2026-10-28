@@ -1170,7 +1170,7 @@ function vtBarsParse(d){var a=vtArr(d);if(!a.length&&d&&typeof d==="object"){for
   var o=[];a.forEach(function(b){var t=vtTs(b.openTime||b.time||b.t);if(!(t>0)&&typeof b.time==="number")t=b.time*1000;if(!(t>0))return;o.push({time:Math.floor(t/1000),open:+b.open,high:+b.high,low:+b.low,close:+b.close})});
   o.sort(function(x,y){return x.time-y.time});var r=[];o.forEach(function(b){if(!r.length||r[r.length-1].time!==b.time)r.push(b)});return r}
 /* alamat OHLC Biquote tidak tertulis di docs: dicari otomatis dari spesifikasi Swagger mereka, lalu dicoba beberapa pola umum */
-var VT_TPL=["/api/ohlc/{s}?interval={i}&limit={n}","/api/ohlc?symbol={s}&interval={i}&limit={n}","/api/ohlc/{s}?timeframe={i}&limit={n}","/api/ohlc?symbol={s}&timeframe={i}&limit={n}","/api/ohlc/{s}/{i}?limit={n}","/api/candles/{s}?interval={i}&limit={n}","/api/candles?symbol={s}&interval={i}&limit={n}"],vtOhlcFail=0;
+var VT_TPL=["/api/ohlc/{s}?interval={i}&limit={n}","/api/ohlc?symbol={s}&interval={i}&limit={n}","/api/ohlc/{s}?timeframe={i}&limit={n}","/api/ohlc?symbol={s}&timeframe={i}&limit={n}","/api/ohlc/{s}/{i}?limit={n}","/api/ohlcv/{s}?interval={i}&limit={n}","/api/bars/{s}?interval={i}&limit={n}","/api/history/{s}?interval={i}&limit={n}","/api/chart/{s}?interval={i}&limit={n}","/api/candles/{s}?interval={i}&limit={n}","/api/candles?symbol={s}&interval={i}&limit={n}","/api/ohlc/{s}?tf={i}&limit={n}","/api/ohlc/{s}?period={i}&limit={n}"],vtOhlcFail=0;
 function vtDiscover(cb){
   var S=["/swagger/v1/swagger.json","/swagger/swagger.json","/swagger.json","/openapi.json"],k=0;
   (function n(){if(k>=S.length)return cb(null);
@@ -1182,19 +1182,24 @@ function vtDiscover(cb){
       cb(pt+(q.length?"?"+q.join("&"):""))}).catch(n)})()}
 function vtLoadBars(){
   var i=VIX[VT.sym],tf=VTF[VT.tf],key=VT.sym+"|"+VT.tf;vtBarKey=key;vtBars=[];if(vtCs)vtCs.setData([]);
-  var bq=i&&(i.bq||i.a[0]),fm=[tf[0],tf[1],String(tf[2]/60)],diag=[];
+  var bq=i&&(i.bq||i.a[0]),fm=[tf[0],tf[1],String(tf[2]/60)],diag=[],dead={};
+  var note=function(x){if(diag.indexOf(x)<0)diag.push(x)};
   var run=function(list){
     var k=0;(function nx(){
-      if(k>=list.length){vtOhlcFail=Date.now();vtPaintNote(L("Riwayat candle belum bisa dimuat","Candle history unavailable")+" ("+diag.slice(-3).join(", ")+"). "+L("Candle terbentuk dari harga live.","Candles build from live prices."));return}
-      var c=list[k++],u=BQ+c.t.replace("{s}",encodeURIComponent(bq)).replace("{i}",encodeURIComponent(fm[c.f])).replace("{n}","500");
-      fetch(u).then(function(r){if(!r.ok){diag.push(r.status+" "+c.t.split("?")[0]);throw 0}return r.json()}).then(function(d){
-        var b=vtBarsParse(d);if(!b.length){diag.push("empty "+c.t.split("?")[0]);throw 0}
-        if(vtBarKey!==key)return;try{localStorage.setItem("vtOhlc",JSON.stringify(c))}catch(e){}
-        vtBars=b;if(vtCs){vtCs.setData(b);vtCh.timeScale().fitContent()}vtPaintNote("")}).catch(function(){nx()})})()};
+      if(k>=list.length){vtOhlcFail=Date.now();vtPaintNote(L("Riwayat candle belum bisa dimuat","Candle history unavailable")+": "+diag.slice(0,7).join(" · ")+" — "+L("candle terbentuk dari harga live.","candles build from live prices."));return}
+      var c=list[k++],path=c.t.split("?")[0];if(dead[path])return nx();
+      var u=BQ+c.t.replace("{s}",encodeURIComponent(bq)).replace("{i}",encodeURIComponent(fm[c.f])).replace("{n}","500");
+      fetch(u).then(function(r){
+        if(!r.ok)return r.text().then(function(tx){var m="";try{m=JSON.parse(tx).message||""}catch(e){m=tx}
+          if(r.status===404&&!m)dead[path]=1;note(r.status+" "+path+(m?" ("+String(m).replace(/\s+/g," ").slice(0,80)+")":""));throw 0});
+        return r.json().then(function(d){
+          var b=vtBarsParse(d);if(!b.length){note("200 "+path+" keys:"+(d&&typeof d==="object"?Object.keys(d).slice(0,6).join("/"):typeof d));throw 0}
+          if(vtBarKey!==key)return;try{localStorage.setItem("vtOhlc",JSON.stringify(c))}catch(e){}
+          vtBars=b;if(vtCs){vtCs.setData(b);vtCh.timeScale().fitContent()}vtPaintNote("")})}).catch(function(){nx()})})()};
   var saved=null;try{saved=JSON.parse(localStorage.getItem("vtOhlc")||"null")}catch(e){}
   var st=[];VT_TPL.forEach(function(t){[0,1,2].forEach(function(f){st.push({t:t,f:f})})});
   if(saved&&saved.t){run([saved].concat(st));return}
-  if(vtOhlcFail&&Date.now()-vtOhlcFail<60000){vtPaintNote(L("Riwayat candle belum bisa dimuat. Candle terbentuk dari harga live.","Candle history unavailable. Candles build from live prices."));return}
+  if(vtOhlcFail&&Date.now()-vtOhlcFail<60000){vtPaintNote(L("Riwayat candle belum bisa dimuat. Buka Trade lagi 1 menit lagi.","Candle history unavailable. Reopen Trade in a minute."));return}
   vtDiscover(function(tpl){var l=[];if(tpl)[0,1,2].forEach(function(f){l.push({t:tpl,f:f})});run(l.concat(st))})}
 function vtChart(){return vtCh}
 function vtCandle(id,p,ts){
