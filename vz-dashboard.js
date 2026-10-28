@@ -1069,8 +1069,17 @@ var VCFG={takerFee:0,makerFee:0,defaultLev:100,maxLev:500,levMax:{},mmr:0.005,sl
 var VTF=[["1m","M1",60],["5m","M5",300],["15m","M15",900],["30m","M30",1800],["1h","H1",3600],["4h","H4",14400],["1d","D1",86400]];
 var VERR={insufficient_margin:["Margin tidak cukup.","Insufficient margin."],no_price:["Harga belum tersedia.","No price yet."],bad_order:["Order tidak valid.","Invalid order."],account_breached:["Akun sudah breached.","Account is breached."],account_passed:["Challenge sudah lolos. Trading di akun berikutnya.","Challenge already passed. Trade on the next account."]};
 var VBK={},vtMap={},vtWs=null,vtConn=false,vtPollT=0,vtRefT=0,vtStarted=false,vtEntSt="idle",vtBars=[],vtBarKey="",vtCh=null,vtCs=null,vtLines=[],vtOhlcU=null,vtLwBusy=false,vtToastT=0,vtSig="";
-var VT={on:false,tab:"home",sym:"XAUUSD",cat:"fav",tf:4,side:"buy",ot:"market",pt:"open",acc:null,lot:0.1,sheet:null};
+var selV=null,VT={on:false,tab:"home",sym:"XAUUSD",cat:"fav",tf:4,side:"buy",ot:"market",pt:"open",acc:null,lot:0.1,sheet:null};
 function vtList(){return PERPS.filter(function(a){return a.vt})}
+function vtById(id){var l=vtList();for(var i=0;i<l.length;i++)if(l[i].id===id)return l[i];return null}
+/* halaman statistik akun (sama seperti detail akun CFD/Perps), dengan tombol Trade sekarang menuju terminal */
+function vtAsCfd(a){var s=vtSnap(a),lg=PE.ledger(a);
+  return{id:esc(a.id),program:esc(a.program),phase:a.phase||null,phases:a.phases||null,size:a.size,equity:s.equity,target:a.target||null,dd:a.rules.dailyDd,md:a.rules.maxDd,ddUsed:s.dailyLoss,mdUsed:s.maxLoss,days:lg.days,minDays:a.minDays||0,pnl:lg.pnl,stats:lg.stats,
+    trades:lg.trades.map(function(x){var i=VIX[x.s];return{t:String(x.t).replace("T"," "),s:x.s,d:x.d,v:i?Math.round(x.v/i.cs*100)/100:x.v,p:x.p}}),offline:false,breach:a.status==="breached"?(a.reason==="daily"?"daily":"max"):null,funded:!!a.isFunded,cred:null}}
+function vtDetail(a){
+  var h=accDetail(vtAsCfd(a)),on=a.status==="active";
+  var btn='<button type="button" class="lg-btn" id="vtGoTrade" style="margin-bottom:12px"'+(on?"":" disabled")+'>'+L("Trade sekarang","Trade now")+'</button>'+(a.status==="passed"?'<div class="lg-card"><p>'+L("Challenge lolos. Akun berikutnya: ","Challenge passed. Next account: ")+esc(a.passedTo||"")+'</p></div>':"");
+  return h.replace('</button><div class="lg-card">','</button>'+btn+'<div class="lg-card">')}
 function vtAcc(){var l=vtList();for(var i=0;i<l.length;i++)if(l[i].id===VT.acc)return l[i];return null}
 function vtFav(){try{var f=JSON.parse(localStorage.getItem("vtFav")||"null");if(Array.isArray(f))return f}catch(e){}return["XAUUSD","EURUSD","GBPUSD","US500","NAS100","BTCUSD"]}
 function vtFavSet(f){try{localStorage.setItem("vtFav",JSON.stringify(f))}catch(e){}}
@@ -1102,7 +1111,7 @@ function vtPass(a){
 function vtBoot(){
   if(!user||vtEntSt==="loading")return;pLoadAll();
   if(pFsState==="idle"&&!vtBoot.b){vtBoot.b=true;pRemoteLoad(function(){vtBoot.b=false;vtHeal();pSave();vtEntSt="idle";vtBoot();if(view==="home"&&PM!=="perp")dash()});return}
-  if(pFsState!=="ok"||vtEntSt==="done")return;
+  if(pFsState!=="ok")return;if(vtList().length)vtStart();if(vtEntSt==="done")return;
   vtEntSt="loading";
   apiPost({action:"vt"},function(d){
     var un=(Array.isArray(d.entitlements)?d.entitlements:[]).filter(function(e){return e.status==="unused"});
@@ -1117,7 +1126,7 @@ function vtTickIn(t){
   if(Array.isArray(t)){t.forEach(vtTickIn);return}
   if(!t||!t.symbol)return;var id=vtMap[String(t.symbol).toUpperCase()];if(!id)return;
   var bid=+t.bid,ask=+t.ask,m=+t.mid;if(!(bid>0&&ask>=bid)){if(!(m>0))return;bid=ask=m}
-  var ts=Date.parse(t.timestamp);if(!(ts>0))ts=Date.now();var o=VBK[id];
+  var ts=vtTs(t.timestamp);if(!(ts>0))ts=Date.now();var o=VBK[id];
   VBK[id]={bid:bid,ask:ask,mid:(bid+ask)/2,pct:t.dayDiffPercent!=null?+t.dayDiffPercent:(o?o.pct:0),ts:ts,rx:Date.now(),closed:t.marketState==="closed"}
   vtCandle(id,(bid+ask)/2,ts)}
 function vtLatest(cb){
@@ -1149,27 +1158,44 @@ function vtStep(){
     var ok=Object.keys(a.positions).every(function(s){return vtLive(s)});
     if(ok){var ev=PE.onTick(a,VBK,VCFG,Date.now());if(ev.length){ch=true;vtEv(a,ev)}}
     if(vtPass(a)){ch=true;vtToast(L("Selamat! Challenge lolos. Akun berikutnya dibuat otomatis: ","Congrats! Challenge passed. Next account created: ")+a.passedTo,true)}});
-  if(ch){pSave();pPush(true);if(VT.on)vtRender();else if(view==="home"&&PM!=="perp"&&!$("vtApp"))dash()}
+  if(ch){pSave();pPush(true);if(VT.on)vtRender();else if(view==="home"&&PM!=="perp"&&!VT.on)dash()}
   if(VT.on&&!ch)vtPaint()}
 function vtEv(a,ev){ev.forEach(function(e){
   if(e.type==="breach")vtToast((a.reason==="daily"?L("Batas drawdown harian tercapai. Akun breached.","Daily drawdown reached. Account breached."):a.reason==="liquidation"?L("Stop out. Akun breached.","Stop out. Account breached."):L("Batas drawdown total tercapai. Akun breached.","Max drawdown reached. Account breached.")),false);
   else if(e.type==="stop_loss")vtToast("Stop Loss "+e.symbol,false);else if(e.type==="take_profit")vtToast("Take Profit "+e.symbol,true)})}
 /* ---- candle ---- */
 function vtLw(cb){if(window.LightweightCharts)return cb(true);if(vtLwBusy)return;vtLwBusy=true;var i=0;(function n(){if(i>=LWU.length){vtLwBusy=false;return cb(false)}var s=document.createElement("script");s.src=LWU[i++];s.onload=function(){vtLwBusy=false;cb(true)};s.onerror=n;document.head.appendChild(s)})()}
+function vtTs(v){var x=String(v==null?"":v);if(/^\d{4}-\d\d-\d\dT[\d:.]+$/.test(x))x+="Z";return Date.parse(x)}
 function vtBarsParse(d){var a=vtArr(d);if(!a.length&&d&&typeof d==="object"){for(var k in d)if(Array.isArray(d[k])){a=d[k];break}}
-  var o=[];a.forEach(function(b){var t=Date.parse(b.openTime||b.time||b.t);if(!(t>0)&&typeof b.time==="number")t=b.time*1000;if(!(t>0))return;o.push({time:Math.floor(t/1000),open:+b.open,high:+b.high,low:+b.low,close:+b.close})});
+  var o=[];a.forEach(function(b){var t=vtTs(b.openTime||b.time||b.t);if(!(t>0)&&typeof b.time==="number")t=b.time*1000;if(!(t>0))return;o.push({time:Math.floor(t/1000),open:+b.open,high:+b.high,low:+b.low,close:+b.close})});
   o.sort(function(x,y){return x.time-y.time});var r=[];o.forEach(function(b){if(!r.length||r[r.length-1].time!==b.time)r.push(b)});return r}
+/* alamat OHLC Biquote tidak tertulis di docs: dicari otomatis dari spesifikasi Swagger mereka, lalu dicoba beberapa pola umum */
+var VT_TPL=["/api/ohlc/{s}?interval={i}&limit={n}","/api/ohlc?symbol={s}&interval={i}&limit={n}","/api/ohlc/{s}?timeframe={i}&limit={n}","/api/ohlc?symbol={s}&timeframe={i}&limit={n}","/api/ohlc/{s}/{i}?limit={n}","/api/candles/{s}?interval={i}&limit={n}","/api/candles?symbol={s}&interval={i}&limit={n}"],vtOhlcFail=0;
+function vtDiscover(cb){
+  var S=["/swagger/v1/swagger.json","/swagger/swagger.json","/swagger.json","/openapi.json"],k=0;
+  (function n(){if(k>=S.length)return cb(null);
+    fetch(BQ+S[k++]).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(sp){
+      var ps=sp.paths||{},key=Object.keys(ps).filter(function(x){return /ohlc|candle/i.test(x)&&ps[x].get})[0];if(!key)throw 0;
+      var pt=key,q=[];
+      (ps[key].get.parameters||[]).forEach(function(p){var nm=p.name||"",role=/symbol|ticker|instrument/i.test(nm)?"{s}":/interval|timeframe|period|resolution|^tf$/i.test(nm)?"{i}":/limit|count|bars|size|take|max/i.test(nm)?"{n}":"";
+        if(p.in==="path")pt=pt.replace("{"+nm+"}",role||"{s}");else if(p.in==="query"&&role)q.push(nm+"="+role)});
+      cb(pt+(q.length?"?"+q.join("&"):""))}).catch(n)})()}
 function vtLoadBars(){
   var i=VIX[VT.sym],tf=VTF[VT.tf],key=VT.sym+"|"+VT.tf;vtBarKey=key;vtBars=[];if(vtCs)vtCs.setData([]);
-  var bq=i&&(i.bq||i.a[0]),n=500;
-  var urls=vtOhlcU?[vtOhlcU]:[BQ+"/api/ohlc/{s}?interval={i}&limit={n}",BQ+"/api/ohlc?symbol={s}&interval={i}&limit={n}",BQ+"/api/ohlc/{s}/{i}?limit={n}"];
-  var try1=function(k){
-    if(k>=urls.length){vtPaintNote(L("Riwayat candle belum bisa dimuat. Candle akan terbentuk dari harga live.","Candle history unavailable. Candles will build from live prices."));return}
-    var u=urls[k].replace("{s}",encodeURIComponent(bq)).replace("{i}",tf[0]).replace("{n}",n);
-    fetch(u).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){
-      var b=vtBarsParse(d);if(!b.length)throw 0;
-      if(vtBarKey!==key)return;vtOhlcU=urls[k];vtBars=b;if(vtCs){vtCs.setData(b);vtChart().timeScale().fitContent()}vtPaintNote("")}).catch(function(){try1(k+1)})};
-  try1(0)}
+  var bq=i&&(i.bq||i.a[0]),fm=[tf[0],tf[1],String(tf[2]/60)],diag=[];
+  var run=function(list){
+    var k=0;(function nx(){
+      if(k>=list.length){vtOhlcFail=Date.now();vtPaintNote(L("Riwayat candle belum bisa dimuat","Candle history unavailable")+" ("+diag.slice(-3).join(", ")+"). "+L("Candle terbentuk dari harga live.","Candles build from live prices."));return}
+      var c=list[k++],u=BQ+c.t.replace("{s}",encodeURIComponent(bq)).replace("{i}",encodeURIComponent(fm[c.f])).replace("{n}","500");
+      fetch(u).then(function(r){if(!r.ok){diag.push(r.status+" "+c.t.split("?")[0]);throw 0}return r.json()}).then(function(d){
+        var b=vtBarsParse(d);if(!b.length){diag.push("empty "+c.t.split("?")[0]);throw 0}
+        if(vtBarKey!==key)return;try{localStorage.setItem("vtOhlc",JSON.stringify(c))}catch(e){}
+        vtBars=b;if(vtCs){vtCs.setData(b);vtCh.timeScale().fitContent()}vtPaintNote("")}).catch(function(){nx()})})()};
+  var saved=null;try{saved=JSON.parse(localStorage.getItem("vtOhlc")||"null")}catch(e){}
+  var st=[];VT_TPL.forEach(function(t){[0,1,2].forEach(function(f){st.push({t:t,f:f})})});
+  if(saved&&saved.t){run([saved].concat(st));return}
+  if(vtOhlcFail&&Date.now()-vtOhlcFail<60000){vtPaintNote(L("Riwayat candle belum bisa dimuat. Candle terbentuk dari harga live.","Candle history unavailable. Candles build from live prices."));return}
+  vtDiscover(function(tpl){var l=[];if(tpl)[0,1,2].forEach(function(f){l.push({t:tpl,f:f})});run(l.concat(st))})}
 function vtChart(){return vtCh}
 function vtCandle(id,p,ts){
   if(!VT.on||VT.tab!=="trade"||id!==VT.sym||!vtCs||vtBarKey!==VT.sym+"|"+VT.tf)return;
@@ -1344,6 +1370,7 @@ function dashHome(){
   if(CFG&&user&&!user.verified)return'<div class="lg-card"><b>'+t("verT")+'</b><p>'+t("verMsg")+'</p><div class="lg-msg" id="verMsg" role="alert"></div><button class="lg-btn" type="button" id="verDone">'+t("verDone")+'</button><button class="lg-link" type="button" id="verResend">'+t("verResend")+'</button></div>';
   if(PM==="perp")return perpHome();
   vtBoot();
+  if(selV!==null){var va=vtById(selV);if(va)return x+vtDetail(va);selV=null}
   if(a)return x+accDetail(a);
   if(ACC_API&&accState==="loading"){x+=skel()}
   else if(ACC_API&&accState==="err"){x+='<div class="lg-card"><p>'+t("accErr")+(accInfo?" ["+esc(accInfo)+"]":"")+'</p><button type="button" class="lg-btn ghost" id="accRetry">'+t("accRetry")+'</button></div>'}
@@ -1599,10 +1626,11 @@ function dash(){
   h+=view==="lb"?viewLb():view==="wd"?viewWd():view==="prof"?viewProf():view==="aff"?viewAff():view==="offers"?viewOffers():view==="cert"?viewCert():dashHome();
   var db=$("dBody"),key=[view,selAcc,accState].join(":"),fresh=key!==animKey;animKey=key;
   db.innerHTML=h;db.classList.toggle("vz-anim",fresh);if($("pTerm"))pAfter();
-  document.querySelectorAll(".dnav button").forEach(function(b){b.onclick=function(){view=b.dataset.k;if(view==="home"){selAcc=null;selP=null}dash()}});
+  document.querySelectorAll(".dnav button").forEach(function(b){b.onclick=function(){view=b.dataset.k;if(view==="home"){selAcc=null;selP=null;selV=null}dash()}});
   document.querySelectorAll(".acc:not(.accv)").forEach(function(b){b.onclick=function(){selAcc=+b.dataset.i;calY=null;histN=10;dash()}});
-  document.querySelectorAll(".accv").forEach(function(b){b.onclick=function(){vtOpen(b.dataset.vt)}});
-  var ab=$("accBack");if(ab)ab.onclick=function(){selAcc=null;dash()};
+  document.querySelectorAll(".accv").forEach(function(b){b.onclick=function(){selV=b.dataset.vt;calY=null;histN=10;dash()}});
+  var gt=$("vtGoTrade");if(gt)gt.onclick=function(){vtOpen(selV)};
+  var ab=$("accBack");if(ab)ab.onclick=function(){selAcc=null;selV=null;dash()};
   document.querySelectorAll("#accTabs button").forEach(function(b){b.onclick=function(){accTab=b.dataset.at;dash()}});
   var vd=$("verDone");
   if(vd)vd.onclick=function(){var cu=fb.auth().currentUser;cu.reload().then(function(){return cu.getIdToken(true)}).then(function(){user.verified=cu.emailVerified;if(user.verified){accState="idle";dash();loadAccounts()}else{$("verMsg").textContent=t("verNot")}}).catch(function(){$("verMsg").textContent=t("eGen")})};
