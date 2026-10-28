@@ -220,6 +220,8 @@ const DEFAULT_CFG = {
 
 const r8 = (x) => Math.round(x * 1e8) / 1e8;
 const EPS = 1e-12;
+const QC = {}; // QC[simbol](harga) = nilai USD dari 1 satuan mata uang kuotasi; kosong = kuotasi USD (Perps dan pair USD)
+const cv = (s, p) => (QC[s] ? QC[s](p) : 1);
 const utcDay = (t) => new Date(t).toISOString().slice(0, 10);
 const mid = (b) => (b.bid + b.ask) / 2;
 
@@ -238,7 +240,7 @@ function newAccount({ id, size, rules = {}, now = Date.now() }) {
 
 function upnl(p, b) {
   const px = p.side === "long" ? b.bid : b.ask; // harga yang didapat kalau ditutup sekarang
-  return (p.side === "long" ? px - p.entry : p.entry - px) * p.qty;
+  return (p.side === "long" ? px - p.entry : p.entry - px) * p.qty * cv(p.symbol, px);
 }
 
 function equity(acc, books) {
@@ -249,13 +251,13 @@ function equity(acc, books) {
 
 function usedMargin(acc) {
   let m = 0;
-  for (const p of Object.values(acc.positions)) m += (p.qty * p.entry) / p.lev;
+  for (const p of Object.values(acc.positions)) m += (p.qty * p.entry * cv(p.symbol, p.entry)) / p.lev;
   return m;
 }
 
 function maintMargin(acc, books, cfg) {
   let m = 0;
-  for (const p of Object.values(acc.positions)) m += p.qty * mid(books[p.symbol]) * cfg.mmr;
+  for (const p of Object.values(acc.positions)) m += p.qty * mid(books[p.symbol]) * cv(p.symbol, mid(books[p.symbol])) * cfg.mmr;
   return m;
 }
 
@@ -277,8 +279,8 @@ function applyFill(acc, symbol, side, qty, price, maker, cfg, reduceOnly, now) {
   const pos = acc.positions[symbol];
   if (pos && (pos.side === "long") !== buy) {
     const cq = Math.min(rest, pos.qty), before = pos.qty;
-    const gross = (pos.side === "long" ? price - pos.entry : pos.entry - price) * cq;
-    const closeFee = price * cq * rate;
+    const gross = (pos.side === "long" ? price - pos.entry : pos.entry - price) * cq * cv(symbol, price);
+    const closeFee = price * cq * cv(symbol, price) * rate;
     const share = (pos.feePaid || 0) * (cq / before);
     pos.feePaid = r8((pos.feePaid || 0) - share);
     acc.balance = r8(acc.balance + gross);
@@ -292,7 +294,7 @@ function applyFill(acc, symbol, side, qty, price, maker, cfg, reduceOnly, now) {
     ev.push({ type: "close", symbol, qty: r8(cq), price, pnl: r8(gross) });
   }
   if (rest > EPS && !reduceOnly) {
-    const openFee = price * rest * rate;
+    const openFee = price * rest * cv(symbol, price) * rate;
     fee += openFee;
     const cur = acc.positions[symbol];
     if (cur) {
@@ -321,7 +323,7 @@ function marginCheck(acc, books, symbol, side, qty, price, maker, cfg, reduceOnl
   const closing = opposite ? Math.min(qty, pos.qty) : 0;
   const opening = reduceOnly ? 0 : qty - closing;
   const lev = acc.lev[symbol] || cfg.defaultLev;
-  const need = (opening * price) / lev + price * qty * (maker ? cfg.makerFee : cfg.takerFee);
+  const need = (opening * price * cv(symbol, price)) / lev + price * qty * cv(symbol, price) * (maker ? cfg.makerFee : cfg.takerFee);
   const free = equity(acc, books) - usedMargin(acc);
   return need > free + EPS ? "insufficient_margin" : null;
 }
@@ -348,7 +350,7 @@ function placeOrder(acc, o, books, cfg = DEFAULT_CFG, now = Date.now()) {
     return { ok: true, filled: true, price: px, events };
   }
   const id = acc.nextOrderId++;
-  acc.orders.push({ id, symbol: o.symbol, side: o.side, qty: o.qty, price: o.price, reduceOnly: !!o.reduceOnly });
+  acc.orders.push({ id, symbol: o.symbol, side: o.side, qty: o.qty, price: o.price, reduceOnly: !!o.reduceOnly, sl: o.sl || null, tp: o.tp || null });
   return { ok: true, filled: false, orderId: id, events: [] };
 }
 
@@ -406,6 +408,7 @@ function onTick(acc, books, cfg = DEFAULT_CFG, now = Date.now()) {
     const err = marginCheck(acc, books, o.symbol, o.side, o.qty, o.price, true, cfg, o.reduceOnly);
     if (err) { events.push({ type: "order_cancelled", id: o.id, reason: err }); continue; }
     events.push(...applyFill(acc, o.symbol, o.side, o.qty, o.price, true, cfg, o.reduceOnly, now));
+    if (acc.positions[o.symbol]) { if (o.sl) acc.positions[o.symbol].sl = o.sl; if (o.tp) acc.positions[o.symbol].tp = o.tp; }
   }
 
   // 2) stop loss dan take profit
@@ -482,7 +485,7 @@ function ledger(acc) {
   return { pnl, days: days.size, firstEntry: acc.firstOpen || undefined, stats, trades: recent };
 }
 
-return{DEFAULT_CFG,validBook,newAccount,equity,usedMargin,setLeverage,placeOrder,cancelOrder,setStops,onTick,applyFunding,snapshot,ledger};
+return{QC,DEFAULT_CFG,validBook,newAccount,equity,usedMargin,setLeverage,placeOrder,cancelOrder,setStops,onTick,applyFunding,snapshot,ledger};
 })();
 /* ===== PERPS: dual login (CFD / Perps) + terminal. Harga: Bybit publik. Mesin: perp-engine.mjs (inline di atas) ===== */
 var PM=document.documentElement.getAttribute("data-mode")==="perp"?"perp":"cfd";
@@ -529,7 +532,7 @@ function pRenderList(){
     return'<button type="button" class="prow" data-pa="sym" data-s="'+s+'"><b>'+esc(pBase(s))+'</b><span class="pm">'+pLevMax(s)+'x</span><span class="pp">'+(t&&t.last>0?t.last.toFixed(Math.min(d,8)):"-")+'</span><span class="pcc '+(t?pc(t.chg):"")+'">'+(t&&isFinite(t.chg)?(t.chg>0?"+":"")+(t.chg*100).toFixed(2)+"%":"-")+'</span></button>'}).join("");
   e.innerHTML=x?x+(tot>100?'<p class="acc-hint">'+L("Menampilkan 100 dari ","Showing 100 of ")+tot+L(". Ketik untuk mencari.",". Type to search.")+'</p>':""):'<p class="acc-hint">'+L("Koin tidak ditemukan.","No coin found.")+'</p>'}
 /* --- langganan harga dinamis: hanya koin yang dipakai (dipilih + posisi + order) --- */
-function pNeed(){var m={};m[pSym]=1;PERPS.forEach(function(a){if(a.status!=="active")return;Object.keys(a.positions).forEach(function(s){m[s]=1});a.orders.forEach(function(o){m[o.symbol]=1})});return m}
+function pNeed(){var m={};m[pSym]=1;PERPS.forEach(function(a){if(a.status!=="active"||a.vt)return;Object.keys(a.positions).forEach(function(s){m[s]=1});a.orders.forEach(function(o){m[o.symbol]=1})});return m}
 function pSync(){
   var w=pWs;if(!w||w.readyState!==1)return;var need=pNeed(),add=[],del=[],s;
   for(s in need)if(!pSubs[s])add.push(s);
@@ -588,7 +591,7 @@ function pFund(a){
   var f=PE.newAccount({id:id,size:a.size,rules:PRULES});
   f.program=PPROG;f.funded=true;f.isFunded=true;f.fromId=a.id;f.fundedDate=new Date().toISOString().slice(0,10);f.certId="VZ-"+id;
   PERPS.push(f)}
-function pHeal(){PERPS.slice().forEach(function(a){if(a.status==="passed"&&!a.isFunded)pFund(a)})}
+function pHeal(){PERPS.slice().forEach(function(a){if(a.status==="passed"&&!a.isFunded&&!a.vt)pFund(a)});vtHeal()}
 function pCheckPass(a){
   if(a.status!=="active"||a.isFunded)return false;
   if(Object.keys(a.positions).length||a.orders.length)return false;   /* profit harus sudah realized dan posisi tertutup */
@@ -609,7 +612,7 @@ function pConnect(){
 function pReady(a){return Object.keys(a.positions).every(function(s){return PE.validBook(BK[s],PCFG)})}
 function pStep(){
   var n=Date.now();pLastMsg=n;if(n-pLastStep<250)return;pLastStep=n;var ch=false;
-  PERPS.forEach(function(a){if(a.status!=="active")return;
+  PERPS.forEach(function(a){if(a.status!=="active"||a.vt)return;
     var slot=Math.floor(n/28800000);if(a.fSlot===undefined)a.fSlot=slot;
     if(slot>a.fSlot){var ok=true;Object.keys(a.positions).forEach(function(s){var t=TK[s];if(t&&isFinite(+t.fundingRate)&&+t.markPrice>0)PE.applyFunding(a,s,+t.fundingRate,+t.markPrice,n);else ok=false});if(ok){a.fSlot=slot;ch=true}}
     var ev=PE.onTick(a,BK,PCFG,n);if(ev.length){ch=true;pEvents(a,ev)}
@@ -666,11 +669,11 @@ function perpHome(){
   pLoadAll();pConnect();pLoadInfo();pSync();pBoot();
   var a=selP!==null?PERPS[selP]:null;if(a)return perpDetail(a);
   var x=modeSw();
-  var nA=PERPS.filter(function(c){return c.status==="active"}).length,nI=PERPS.length-nA;
-  if(PERPS.length){
+  var PL=PERPS.filter(function(c){return !c.vt}),nA=PL.filter(function(c){return c.status==="active"}).length,nI=PL.length-nA;
+  if(PL.length){
     x+='<div class="lg-tabs" role="group" id="accTabs"><button type="button" data-at="active" aria-pressed="'+(accTab==="active")+'">'+t("tabActive")+' ('+nA+')</button><button type="button" data-at="inactive" aria-pressed="'+(accTab==="inactive")+'">'+t("tabInactive")+' ('+nI+')</button></div>';
     if(accTab==="inactive"?!nI:!nA)x+='<div class="lg-card"><p>'+t("accTabNone")+'</p></div>'}
-  x+=PERPS.map(function(c,i){if((c.status!=="active")!==(accTab==="inactive"))return"";var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+(c.funded?' · Funded':'')+'</small></div><div class="acc-r">'+(c.status==="passed"?'<strong class="up">'+L("Lolos","Passed")+'</strong>':br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+""+f2(Math.abs(pf))+" USDT"+'</strong>')+'<small>Balance '+f2(c.balance)+" USDT"+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
+  x+=PERPS.map(function(c,i){if(c.vt||(c.status!=="active")!==(accTab==="inactive"))return"";var br=c.status!=="active",pf=c.balance-c.size;return'<button type="button" class="acc" data-pa="open" data-i="'+i+'"><div><b>'+esc(c.program)+" "+kfmt(c.size)+'</b><small>ID '+esc(c.id)+(c.funded?' · Funded':'')+'</small></div><div class="acc-r">'+(c.status==="passed"?'<strong class="up">'+L("Lolos","Passed")+'</strong>':br?'<strong class="dn">Breached</strong>':'<strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+""+f2(Math.abs(pf))+" USDT"+'</strong>')+'<small>Balance '+f2(c.balance)+" USDT"+'</small></div><span class="acc-a">&#8250;</span></button>'}).join("");
   x+=pBuyCard();
   return x}
 function pBuyCard(){
@@ -1042,22 +1045,318 @@ function pSubmit(a){
   setInterval(function(){if($("pTerm"))pLive()},1000);
 })();
 
+/* ===== VEKXT TRADER: terminal CFD simulasi di dashboard. Harga: Biquote (feed MT5 gratis). Mesin: PE (sama dengan Perps). Akun disimpan di PERPS dengan a.vt=1. ===== */
+var BQ="https://biquote.io";
+var VI=[
+{id:"XAUUSD",n:"Gold Spot",c:"metals",cs:100,lev:100,d:2,u:"oz",a:["XAUUSD","GOLD"]},
+{id:"XAGUSD",n:"Silver Spot",c:"metals",cs:5000,lev:50,d:3,u:"oz",a:["XAGUSD","SILVER"]},
+{id:"EURUSD",n:"Euro / US Dollar",c:"forex",cs:100000,lev:100,d:5,u:"EUR",a:["EURUSD"]},
+{id:"GBPUSD",n:"Great British Pound / US Dollar",c:"forex",cs:100000,lev:100,d:5,u:"GBP",a:["GBPUSD"]},
+{id:"USDJPY",n:"US Dollar / Japanese Yen",c:"forex",cs:100000,lev:100,d:3,u:"USD",a:["USDJPY"],q:"JPY"},
+{id:"AUDUSD",n:"Australian Dollar / US Dollar",c:"forex",cs:100000,lev:100,d:5,u:"AUD",a:["AUDUSD"]},
+{id:"NZDUSD",n:"New Zealand Dollar / US Dollar",c:"forex",cs:100000,lev:100,d:5,u:"NZD",a:["NZDUSD"]},
+{id:"USDCAD",n:"US Dollar / Canadian Dollar",c:"forex",cs:100000,lev:100,d:5,u:"USD",a:["USDCAD"],q:"CAD"},
+{id:"USDCHF",n:"US Dollar / Swiss Franc",c:"forex",cs:100000,lev:100,d:5,u:"USD",a:["USDCHF"],q:"CHF"},
+{id:"US500",n:"S&P 500 Index",c:"indices",cs:1,lev:20,d:2,u:"index",a:["US500","SPX500","US500Cash","SP500"]},
+{id:"NAS100",n:"NASDAQ 100 Index",c:"indices",cs:1,lev:20,d:2,u:"index",a:["NAS100","USTEC","US100","NAS100Cash"]},
+{id:"US30",n:"Dow Jones 30 Index",c:"indices",cs:1,lev:20,d:2,u:"index",a:["US30","DJ30","WS30","US30Cash"]},
+{id:"BTCUSD",n:"Bitcoin / US Dollar",c:"crypto",cs:1,lev:20,d:2,u:"BTC",a:["BTCUSD"]},
+{id:"ETHUSD",n:"Ethereum / US Dollar",c:"crypto",cs:1,lev:20,d:2,u:"ETH",a:["ETHUSD"]}];
+var VIX={};VI.forEach(function(i){VIX[i.id]=i;if(i.q)PE.QC[i.id]=function(p){return 1/p}});
+var VCAT=[["fav","Favorites"],["forex","Forex"],["metals","Metals"],["indices","Indices"],["crypto","Crypto"]];
+var PRG={hyper:{n:"Hyper 1 Step",t:[10],dd:4,md:8,min:5,tr:false},nova:{n:"Nova 2 Step",t:[8,5],dd:5,md:10,min:5,tr:false},zero:{n:"Zero Instant",t:null,dd:3,md:7,min:0,tr:true}};
+var VCFG={takerFee:0,makerFee:0,defaultLev:100,maxLev:500,levMax:{},mmr:0.005,slippage:0,maxSpread:0.05};
+var VTF=[["1m","M1",60],["5m","M5",300],["15m","M15",900],["30m","M30",1800],["1h","H1",3600],["4h","H4",14400],["1d","D1",86400]];
+var VERR={insufficient_margin:["Margin tidak cukup.","Insufficient margin."],no_price:["Harga belum tersedia.","No price yet."],bad_order:["Order tidak valid.","Invalid order."],account_breached:["Akun sudah breached.","Account is breached."],account_passed:["Challenge sudah lolos. Trading di akun berikutnya.","Challenge already passed. Trade on the next account."]};
+var VBK={},vtMap={},vtWs=null,vtConn=false,vtPollT=0,vtRefT=0,vtStarted=false,vtEntSt="idle",vtBars=[],vtBarKey="",vtCh=null,vtCs=null,vtLines=[],vtOhlcU=null,vtLwBusy=false,vtToastT=0,vtSig="";
+var VT={on:false,tab:"home",sym:"XAUUSD",cat:"fav",tf:4,side:"buy",ot:"market",pt:"open",acc:null,lot:0.1,sheet:null};
+function vtList(){return PERPS.filter(function(a){return a.vt})}
+function vtAcc(){var l=vtList();for(var i=0;i<l.length;i++)if(l[i].id===VT.acc)return l[i];return null}
+function vtFav(){try{var f=JSON.parse(localStorage.getItem("vtFav")||"null");if(Array.isArray(f))return f}catch(e){}return["XAUUSD","EURUSD","GBPUSD","US500","NAS100","BTCUSD"]}
+function vtFavSet(f){try{localStorage.setItem("vtFav",JSON.stringify(f))}catch(e){}}
+function vtLive(id){var b=VBK[id];return !!b&&!b.closed&&!b.ph&&Date.now()-b.rx<90000}
+function vtFmt(id,p){var i=VIX[id];return(+p).toFixed(i?i.d:2)}
+function vtM(n){n=+n||0;return(n<0?"-":"")+"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function vtEnsure(a){Object.keys(a.positions).forEach(function(s){if(!VBK[s]){var p=a.positions[s];VBK[s]={bid:p.entry,ask:p.entry,mid:p.entry,pct:0,ts:0,rx:0,closed:true,ph:1}}})}
+function vtSnap(a){vtEnsure(a);return PE.snapshot(a,VBK)}
+function vtNewAcc(base,id,pk,size,phase,funded){
+  var g=PRG[pk],a=PE.newAccount({id:id,size:size,rules:{dailyDd:g.dd,maxDd:g.md,trailing:g.tr}});
+  a.vt=1;a.base=base;a.pk=pk;a.program=g.n;a.phase=g.t?phase:null;a.phases=g.t?g.t.length:null;
+  a.isFunded=!!funded;a.funded=!!funded;a.target=funded||!g.t?0:g.t[phase-1];a.minDays=funded?0:g.min;
+  if(funded){a.fundedDate=new Date().toISOString().slice(0,10);a.certId="VZ-"+id}
+  VI.forEach(function(i){a.lev[i.id]=i.lev});return a}
+function vtAdd(a){if(!PERPS.some(function(x){return x.id===a.id}))PERPS.push(a)}
+/* challenge lolos: Nova fase 1 -> fase 2, lainnya -> akun funded. ID turunan supaya tidak dobel lintas perangkat */
+function vtNext(a){
+  var base=a.base||a.id,two=a.pk==="nova"&&(a.phase||1)<2,nid=base+(two?"-P2":"-F");
+  a.passedTo=nid;if(PERPS.some(function(x){return x.id===nid}))return;
+  vtAdd(vtNewAcc(base,nid,a.pk,a.size,two?2:1,!two))}
+function vtHeal(){PERPS.slice().forEach(function(a){if(a.vt&&a.status==="passed")vtNext(a)})}
+function vtPass(a){
+  if(a.status!=="active"||a.isFunded||!(a.target>0))return false;
+  if(Object.keys(a.positions).length||a.orders.length)return false;
+  if(a.balance<a.size*(1+a.target/100)-1e-9)return false;
+  if(PE.ledger(a).days<(a.minDays||0))return false;
+  a.status="passed";a.reason="target";vtNext(a);return true}
+/* ---- klaim pembelian Vekxt Trader (hak akun di Worker monitor) ---- */
+function vtBoot(){
+  if(!user||vtEntSt==="loading")return;pLoadAll();
+  if(pFsState==="idle"&&!vtBoot.b){vtBoot.b=true;pRemoteLoad(function(){vtBoot.b=false;vtHeal();pSave();vtEntSt="idle";vtBoot();if(view==="home"&&PM!=="perp")dash()});return}
+  if(pFsState!=="ok"||vtEntSt==="done")return;
+  vtEntSt="loading";
+  apiPost({action:"vt"},function(d){
+    var un=(Array.isArray(d.entitlements)?d.entitlements:[]).filter(function(e){return e.status==="unused"});
+    var go=function(){if(!un.length){vtEntSt="done";return}
+      var e=un.shift();apiPost({action:"vt_claim",orderId:e.orderId},function(r){
+        if(r&&r.ok&&r.accountId&&PRG[r.program]){var zero=r.program==="zero";vtAdd(vtNewAcc(r.accountId,r.accountId,r.program,r.size,1,zero));pSave();pPush(true)}
+        go()},function(){vtEntSt="done"})};
+    go();if(view==="home"&&PM!=="perp")setTimeout(dash,400)},function(){vtEntSt="done"})}
+/* ---- harga: REST /api/latest untuk mencocokkan simbol, SignalR /hubs/tick untuk push ---- */
+function vtArr(d){if(Array.isArray(d))return d;if(d&&typeof d==="object"){var k=["ticks","data","items","result","quotes"];for(var i=0;i<k.length;i++)if(Array.isArray(d[k[i]]))return d[k[i]];var v=Object.keys(d).map(function(x){return d[x]}).filter(function(x){return x&&typeof x==="object"&&x.symbol});if(v.length)return v}return[]}
+function vtTickIn(t){
+  if(Array.isArray(t)){t.forEach(vtTickIn);return}
+  if(!t||!t.symbol)return;var id=vtMap[String(t.symbol).toUpperCase()];if(!id)return;
+  var bid=+t.bid,ask=+t.ask,m=+t.mid;if(!(bid>0&&ask>=bid)){if(!(m>0))return;bid=ask=m}
+  var ts=Date.parse(t.timestamp);if(!(ts>0))ts=Date.now();var o=VBK[id];
+  VBK[id]={bid:bid,ask:ask,mid:(bid+ask)/2,pct:t.dayDiffPercent!=null?+t.dayDiffPercent:(o?o.pct:0),ts:ts,rx:Date.now(),closed:t.marketState==="closed"}
+  vtCandle(id,(bid+ask)/2,ts)}
+function vtLatest(cb){
+  var q=[];VI.forEach(function(i){i.a.forEach(function(s){q.push("symbols="+encodeURIComponent(s))})});
+  fetch(BQ+"/api/latest?"+q.join("&")).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){
+    var arr=vtArr(d),by={};arr.forEach(function(t){if(t&&t.symbol)by[String(t.symbol).toUpperCase()]=t});
+    VI.forEach(function(i){for(var k=0;k<i.a.length;k++){var s=i.a[k].toUpperCase();if(by[s]){i.bq=by[s].symbol;vtMap[s]=i.id;vtTickIn(by[s]);break}}});
+    if(cb)cb(true)}).catch(function(){if(cb)cb(false)})}
+function vtPollOn(on){clearInterval(vtPollT);vtPollT=0;if(on)vtPollT=setInterval(function(){vtLatest()},2500)}
+function vtScript(cb){if(window.signalR)return cb(true);var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js";s.onload=function(){cb(true)};s.onerror=function(){cb(false)};document.head.appendChild(s)}
+function vtConnect(){
+  if(vtWs||vtConn)return;vtConn=true;
+  vtScript(function(ok){
+    if(!ok){vtConn=false;vtPollOn(true);return}
+    var c=new signalR.HubConnectionBuilder().withUrl(BQ+"/hubs/tick",{skipNegotiation:true,transport:signalR.HttpTransportType.WebSockets}).withAutomaticReconnect([1000,3000,5000,10000]).build();
+    var sub=function(){return c.invoke("Subscribe",VI.filter(function(i){return i.bq}).map(function(i){return i.bq}))};
+    c.on("ReceiveTick",vtTickIn);c.onreconnected(function(){sub().catch(function(){})});
+    c.onclose(function(){vtWs=null;vtPollOn(true);setTimeout(vtConnect,5000)});
+    c.start().then(function(){vtWs=c;vtConn=false;vtPollOn(false);return sub()}).catch(function(){vtConn=false;vtPollOn(true)})})}
+function vtStart(){
+  if(vtStarted)return;vtStarted=true;
+  var go=function(){vtLatest(function(ok){if(!ok){vtStarted=false;setTimeout(vtStart,5000);return}vtConnect();clearInterval(vtRefT);vtRefT=setInterval(function(){vtLatest()},30000)})};go();
+  setInterval(vtStep,500)}
+/* ---- mesin: dijalankan tiap 0,5 dtk untuk semua akun aktif ---- */
+function vtStep(){
+  var ch=false,open=false;
+  vtList().forEach(function(a){
+    if(a.status!=="active")return;open=true;vtEnsure(a);
+    var ok=Object.keys(a.positions).every(function(s){return vtLive(s)});
+    if(ok){var ev=PE.onTick(a,VBK,VCFG,Date.now());if(ev.length){ch=true;vtEv(a,ev)}}
+    if(vtPass(a)){ch=true;vtToast(L("Selamat! Challenge lolos. Akun berikutnya dibuat otomatis: ","Congrats! Challenge passed. Next account created: ")+a.passedTo,true)}});
+  if(ch){pSave();pPush(true);if(VT.on)vtRender();else if(view==="home"&&PM!=="perp"&&!$("vtApp"))dash()}
+  if(VT.on&&!ch)vtPaint()}
+function vtEv(a,ev){ev.forEach(function(e){
+  if(e.type==="breach")vtToast((a.reason==="daily"?L("Batas drawdown harian tercapai. Akun breached.","Daily drawdown reached. Account breached."):a.reason==="liquidation"?L("Stop out. Akun breached.","Stop out. Account breached."):L("Batas drawdown total tercapai. Akun breached.","Max drawdown reached. Account breached.")),false);
+  else if(e.type==="stop_loss")vtToast("Stop Loss "+e.symbol,false);else if(e.type==="take_profit")vtToast("Take Profit "+e.symbol,true)})}
+/* ---- candle ---- */
+function vtLw(cb){if(window.LightweightCharts)return cb(true);if(vtLwBusy)return;vtLwBusy=true;var i=0;(function n(){if(i>=LWU.length){vtLwBusy=false;return cb(false)}var s=document.createElement("script");s.src=LWU[i++];s.onload=function(){vtLwBusy=false;cb(true)};s.onerror=n;document.head.appendChild(s)})()}
+function vtBarsParse(d){var a=vtArr(d);if(!a.length&&d&&typeof d==="object"){for(var k in d)if(Array.isArray(d[k])){a=d[k];break}}
+  var o=[];a.forEach(function(b){var t=Date.parse(b.openTime||b.time||b.t);if(!(t>0)&&typeof b.time==="number")t=b.time*1000;if(!(t>0))return;o.push({time:Math.floor(t/1000),open:+b.open,high:+b.high,low:+b.low,close:+b.close})});
+  o.sort(function(x,y){return x.time-y.time});var r=[];o.forEach(function(b){if(!r.length||r[r.length-1].time!==b.time)r.push(b)});return r}
+function vtLoadBars(){
+  var i=VIX[VT.sym],tf=VTF[VT.tf],key=VT.sym+"|"+VT.tf;vtBarKey=key;vtBars=[];if(vtCs)vtCs.setData([]);
+  var bq=i&&(i.bq||i.a[0]),n=500;
+  var urls=vtOhlcU?[vtOhlcU]:[BQ+"/api/ohlc/{s}?interval={i}&limit={n}",BQ+"/api/ohlc?symbol={s}&interval={i}&limit={n}",BQ+"/api/ohlc/{s}/{i}?limit={n}"];
+  var try1=function(k){
+    if(k>=urls.length){vtPaintNote(L("Riwayat candle belum bisa dimuat. Candle akan terbentuk dari harga live.","Candle history unavailable. Candles will build from live prices."));return}
+    var u=urls[k].replace("{s}",encodeURIComponent(bq)).replace("{i}",tf[0]).replace("{n}",n);
+    fetch(u).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){
+      var b=vtBarsParse(d);if(!b.length)throw 0;
+      if(vtBarKey!==key)return;vtOhlcU=urls[k];vtBars=b;if(vtCs){vtCs.setData(b);vtChart().timeScale().fitContent()}vtPaintNote("")}).catch(function(){try1(k+1)})};
+  try1(0)}
+function vtChart(){return vtCh}
+function vtCandle(id,p,ts){
+  if(!VT.on||VT.tab!=="trade"||id!==VT.sym||!vtCs||vtBarKey!==VT.sym+"|"+VT.tf)return;
+  var sec=VTF[VT.tf][2],t=Math.floor(ts/1000/sec)*sec,l=vtBars[vtBars.length-1];
+  if(l&&l.time===t){l.high=Math.max(l.high,p);l.low=Math.min(l.low,p);l.close=p}
+  else if(!l||t>l.time){l={time:t,open:l?l.close:p,high:p,low:p,close:p};vtBars.push(l)}else return;
+  try{vtCs.update(l)}catch(e){}}
+function vtMkChart(){
+  var el=$("vtCh");if(!el)return;
+  vtLw(function(ok){
+    if(!ok||!$("vtCh")){vtPaintNote(L("Chart gagal dimuat.","Chart failed to load."));return}
+    if(vtCh){try{vtCh.remove()}catch(e){}vtCh=null}
+    var C=window.LightweightCharts,e2=$("vtCh");
+    vtCh=C.createChart(e2,{width:e2.clientWidth||320,height:e2.clientHeight||280,layout:{background:{type:"solid",color:"transparent"},textColor:"#A1A1AA"},grid:{vertLines:{color:"#15171c"},horzLines:{color:"#15171c"}},rightPriceScale:{borderColor:"#292B32"},timeScale:{timeVisible:true,secondsVisible:false,borderColor:"#292B32"}});
+    vtCs=vtCh.addCandlestickSeries({upColor:"#16C784",downColor:"#EA3943",borderVisible:false,wickUpColor:"#16C784",wickDownColor:"#EA3943",priceFormat:{type:"price",precision:VIX[VT.sym].d,minMove:Math.pow(10,-VIX[VT.sym].d)}});
+    vtLines=[];vtLoadBars();vtPosLines();
+    if(window.ResizeObserver)new ResizeObserver(function(){var q=$("vtCh");if(q&&vtCh)vtCh.applyOptions({width:q.clientWidth,height:q.clientHeight})}).observe(e2)})}
+function vtPosLines(){
+  if(!vtCs)return;vtLines.forEach(function(l){try{vtCs.removePriceLine(l)}catch(e){}});vtLines=[];
+  var a=vtAcc(),p=a&&a.positions[VT.sym];if(!p)return;
+  var add=function(pr,c,t){if(pr)vtLines.push(vtCs.createPriceLine({price:pr,color:c,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:t}))};
+  add(p.entry,"#F5B84B","ENTRY");add(p.sl,"#EA3943","SL");add(p.tp,"#16C784","TP")}
+/* ---- UI ---- */
+function vtToast(m,ok){var e=$("vtToast");if(!e){if(!VT.on){try{var d=document.createElement("div");d.className="vtToast "+(ok?"ok":"no");d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},5000)}catch(x){}}return}
+  e.textContent=m;e.className="vtToast on "+(ok?"ok":"no");clearTimeout(vtToastT);vtToastT=setTimeout(function(){e.className="vtToast"},4200)}
+function vtPaintNote(m){var e=$("vtNote");if(e)e.textContent=m}
+function vtOpen(id){
+  vtStart();VT.acc=id;VT.on=true;VT.tab="home";VT.sheet=null;
+  if(!$("vtApp")){var d=document.createElement("div");d.id="vtApp";document.body.appendChild(d);vtCss()}
+  $("vtApp").style.display="flex";document.body.style.overflow="hidden";vtRender()}
+function vtShut(){VT.on=false;if($("vtApp"))$("vtApp").style.display="none";document.body.style.overflow="";if(vtCh){try{vtCh.remove()}catch(e){}vtCh=vtCs=null}dash()}
+function vtCss(){
+  var s=document.createElement("style");s.textContent="#vtApp{position:fixed;inset:0;z-index:300;background:#080A0D;color:#F5F5F5;display:none;flex-direction:column;font:14px system-ui,-apple-system,sans-serif;padding-top:env(safe-area-inset-top);--ac:#F5B84B;--up:#16C784;--dn:#EA3943;--mu:#A1A1AA;--ln:#292B32;--sf:#111318}"
+  +"#vtApp *{box-sizing:border-box}#vtApp button{font:inherit;color:inherit;cursor:pointer}#vtApp input,#vtApp select{font:inherit;color:#F5F5F5;background:#0d0f13;border:1px solid var(--ln);border-radius:10px;padding:11px 12px;width:100%}"
+  +".vtHd{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--ln)}.vtHd b{letter-spacing:.14em;color:var(--ac)}.vtHd small{color:var(--mu);margin-left:auto;text-align:right}.vtHd button{background:none;border:0;font-size:22px;line-height:1;padding:0 6px 0 0}"
+  +".vtBd{flex:1;overflow:auto;padding:14px;-webkit-overflow-scrolling:touch}.vtNav{display:flex;border-top:1px solid var(--ln);background:#0b0d11;padding-bottom:env(safe-area-inset-bottom)}.vtNav button{flex:1;background:none;border:0;padding:9px 0;color:var(--mu);font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px}.vtNav button i{font-style:normal;font-size:18px}.vtNav button.on{color:var(--ac)}"
+  +".vtC{background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:14px;margin-bottom:12px}.vtC h4{margin:0 0 10px;font-size:13px;color:var(--mu);font-weight:600}.vtBig{font-size:28px;font-weight:700}.vtRow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;color:var(--mu)}.vtRow b{color:#F5F5F5;font-weight:600}.up{color:var(--up)!important}.dn{color:var(--dn)!important}"
+  +".vtBar{height:8px;background:#1b1e24;border-radius:99px;overflow:hidden}.vtBar i{display:block;height:100%;background:var(--up);border-radius:99px}.vtTabs{display:flex;gap:6px;overflow:auto;margin-bottom:10px}.vtTabs button{background:none;border:0;padding:8px 12px;color:var(--mu);border-radius:99px;white-space:nowrap}.vtTabs button.on{background:var(--ac);color:#080A0D;font-weight:700}"
+  +".vtMk{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;border-bottom:1px solid #15171c;padding:12px 2px;text-align:left}.vtMk div{flex:1;min-width:0}.vtMk small{display:block;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vtMk span:last-child{text-align:right;font-variant-numeric:tabular-nums}.vtIc{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#080A0D;flex:none}"
+  +".vtBS{display:flex;gap:10px;margin:10px 0}.vtBS button{flex:1;border:0;border-radius:10px;padding:12px;font-weight:700;color:#fff}.vtBuy{background:#16A870}.vtSell{background:#E0414B}.vtBS small{display:block;font-weight:500;opacity:.9}.vtOff{opacity:.35}"
+  +".vtBtn{width:100%;border:0;border-radius:10px;padding:14px;font-weight:700;background:var(--ac);color:#080A0D}.vtGh{width:100%;border:1px solid var(--ac);background:none;border-radius:10px;padding:13px;color:var(--ac);font-weight:700}.vtChw{height:300px;margin:6px 0}.vtChw #vtCh{width:100%;height:100%}.vtLot{display:flex;gap:8px}.vtLot button{width:46px;border:1px solid var(--ln);background:#0d0f13;border-radius:10px;font-size:20px}"
+  +".vtCh{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}.vtCh button{background:#0d0f13;border:1px solid var(--ln);border-radius:8px;padding:7px 11px;color:var(--mu)}.vtCh button.on{border-color:var(--ac);color:var(--ac)}.vtLb{color:var(--mu);font-size:12px;margin:12px 0 5px;display:block}.vtTag{font-size:11px;padding:3px 8px;border-radius:99px;border:1px solid var(--ln);color:var(--mu)}.vtTag.g{color:var(--up);border-color:var(--up)}.vtTag.r{color:var(--dn);border-color:var(--dn)}"
+  +".vtSheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:2}.vtSheet>div{background:#0f1116;width:100%;border-radius:18px 18px 0 0;padding:16px;max-height:88%;overflow:auto;border-top:1px solid var(--ln)}.vtToast{position:fixed;left:14px;right:14px;top:calc(12px + env(safe-area-inset-top));z-index:400;padding:12px 14px;border-radius:12px;background:#111318;border:1px solid var(--ln);display:none}.vtToast.on{display:block}.vtToast.ok{border-color:var(--up)}.vtToast.no{border-color:var(--dn)}";
+  document.head.appendChild(s)}
+function vtIcon(i){var col={metals:"#F5B84B",forex:"#4C8DF6",indices:"#9B7BFF",crypto:"#F7931A"}[i.c];return'<span class="vtIc" style="background:'+col+'">'+esc(i.id.slice(0,3))+'</span>'}
+function vtChg(id){var b=VBK[id];if(!b||b.closed||b.ph)return"—";var p=b.pct||0;return(p>0?"+":"")+p.toFixed(2)+"%"}
+function vtNavHtml(){return[["home","⌂","Home"],["mkts","▥","Markets"],["trade","⇄","Trade"],["pos","☷","Positions"],["more","☰","More"]].map(function(k){return'<button type="button" data-vt="'+k[0]+'" class="'+(VT.tab===k[0]?"on":"")+'"><i>'+k[1]+'</i>'+k[2]+'</button>'}).join("")}
+function vtStat(a){var s=vtSnap(a),g=PRG[a.pk],pr=a.target>0?Math.max(0,Math.min(100,(a.balance-a.size)/(a.size*a.target/100)*100)):0;return{s:s,pr:pr,days:PE.ledger(a).days}}
+function vtRender(){
+  var a=vtAcc();if(!a){vtShut();return}
+  var h='<div class="vtHd"><button type="button" id="vtX" aria-label="Back">&#8249;</button><b>VEKXT TRADER</b><small>'+esc(a.program)+" "+kfmt(a.size)+'<br>ID '+esc(a.id)+'</small></div><div class="vtBd" id="vtBd">'+vtBody(a)+'</div><div class="vtNav">'+vtNavHtml()+'</div><div class="vtToast" id="vtToast"></div>';
+  $("vtApp").innerHTML=h;vtBind(a);vtPaint();
+  if(VT.tab==="trade")vtMkChart()}
+function vtStatusTag(a){return a.status==="breached"?'<span class="vtTag r">Breached</span>':a.status==="passed"?'<span class="vtTag g">'+L("Lolos","Passed")+'</span>':a.isFunded?'<span class="vtTag g">Funded</span>':'<span class="vtTag g">'+L("Berjalan","In Progress")+'</span>'}
+function vtBody(a){
+  var tb=VT.tab;
+  if(tb==="home"){var l=vtList(),sel=l.length>1?'<select id="vtSel">'+l.map(function(x){return'<option value="'+esc(x.id)+'"'+(x.id===a.id?" selected":"")+'>'+esc(x.program)+" "+kfmt(x.size)+" · "+esc(x.id)+(x.status!=="active"?" ("+x.status+")":"")+'</option>'}).join("")+'</select>':"";
+    return sel+'<div class="vtC"><h4>Account Balance</h4><div class="vtBig" data-k="bal"></div><div class="vtRow"><span>Equity</span><b data-k="eq"></b></div><div class="vtRow"><span>P/L</span><b data-k="pnl"></b></div></div>'
+    +(a.target>0?'<div class="vtC"><h4>'+esc(a.program)+(a.phase?" · "+L("Fase","Phase")+" "+a.phase+"/"+a.phases:"")+' &middot; Challenge</h4><div class="vtRow"><span>'+L("Progres target","Target progress")+'</span><b data-k="pr"></b></div><div class="vtBar"><i data-k="prb" style="width:0"></i></div><div class="vtRow"><span>'+L("Profit","Profit")+' / Target</span><b data-k="tg"></b></div></div>':'<div class="vtC"><h4>'+esc(a.program)+' &middot; '+(a.isFunded?"Funded":"")+'</h4><div class="vtRow"><span>Profit</span><b data-k="pnl2"></b></div></div>')
+    +'<div class="vtBS"><button type="button" class="vtBuy" data-go="trade">Trade</button><button type="button" class="vtGh" data-go="mkts" style="flex:1">Markets</button></div><div class="vtBS"><button type="button" class="vtGh" data-go="pos">Positions</button><button type="button" class="vtGh" data-go="more">Challenge</button></div>'}
+  if(tb==="mkts"){var fav=vtFav(),ls=VI.filter(function(i){return VT.cat==="fav"?fav.indexOf(i.id)>-1:i.c===VT.cat});
+    return'<div class="vtTabs">'+VCAT.map(function(c){return'<button type="button" data-cat="'+c[0]+'" class="'+(VT.cat===c[0]?"on":"")+'">'+c[1]+'</button>'}).join("")+'</div>'+(ls.length?ls.map(function(i){return'<button type="button" class="vtMk" data-sym="'+i.id+'">'+vtIcon(i)+'<div><b>'+i.id+'</b><small>'+esc(i.n)+'</small></div><span><b data-p="'+i.id+'">—</b><small data-c="'+i.id+'">—</small></span></button>'}).join(""):'<p class="vtRow">'+L("Belum ada favorit. Buka instrumen lalu tekan bintang.","No favorites yet. Open an instrument and tap the star.")+'</p>')}
+  if(tb==="trade")return vtTradeHtml(a);
+  if(tb==="pos")return vtPosHtml(a);
+  return vtMoreHtml(a)}
+function vtTradeHtml(a){
+  var i=VIX[VT.sym],fav=vtFav().indexOf(i.id)>-1,on=a.status==="active",lim=VT.ot==="limit",sd=VT.side;
+  return'<div style="display:flex;align-items:center;gap:10px">'+vtIcon(i)+'<div style="flex:1"><b style="font-size:17px">'+i.id+'</b><div style="color:var(--mu);font-size:12px">'+esc(i.n)+'</div></div><button type="button" id="vtStar" style="background:none;border:0;font-size:24px;color:'+(fav?"var(--ac)":"var(--mu)")+'">'+(fav?"★":"☆")+'</button><button type="button" id="vtPick" class="vtTag">'+L("Ganti","Change")+'</button></div>'
+  +'<div style="margin:8px 0"><span class="vtBig" data-p="'+i.id+'">—</span> <span data-c="'+i.id+'"></span> <span class="vtTag" data-m="'+i.id+'"></span></div>'
+  +'<div class="vtCh">'+VTF.map(function(f,k){return'<button type="button" data-tf="'+k+'" class="'+(VT.tf===k?"on":"")+'">'+f[1]+'</button>'}).join("")+'</div><div class="vtChw"><div id="vtCh"></div></div><div id="vtNote" style="color:var(--mu);font-size:12px"></div>'
+  +'<div class="vtBS"><button type="button" class="vtBuy'+(sd==="buy"?"":" vtOff")+'" data-side="buy">BUY<small data-ask="'+i.id+'">—</small></button><button type="button" class="vtSell'+(sd==="sell"?"":" vtOff")+'" data-side="sell">SELL<small data-bid="'+i.id+'">—</small></button></div>'
+  +'<div class="vtTabs"><button type="button" data-ot="market" class="'+(!lim?"on":"")+'">Market</button><button type="button" data-ot="limit" class="'+(lim?"on":"")+'">Limit</button></div>'
+  +'<span class="vtLb">'+L("Volume (Lot)","Volume (Lot)")+'</span><div class="vtLot"><button type="button" data-lot="-">−</button><input id="vtLot" inputmode="decimal" value="'+VT.lot+'"><button type="button" data-lot="+">+</button></div><div style="color:var(--mu);font-size:12px;margin-top:4px">1 Lot = '+i.cs.toLocaleString("en-US")+' '+i.u+' · 1:'+i.lev+'</div>'
+  +'<div class="vtCh">'+[0.01,0.05,0.1,0.5,1].map(function(v){return'<button type="button" data-lq="'+v+'">'+v+'</button>'}).join("")+'</div>'
+  +(lim?'<span class="vtLb">'+L("Harga limit","Limit price")+'</span><input id="vtPx" inputmode="decimal">':"")
+  +'<span class="vtLb">Take Profit (TP)</span><input id="vtTp" inputmode="decimal" placeholder="—"><span class="vtLb">Stop Loss (SL)</span><input id="vtSl" inputmode="decimal" placeholder="—">'
+  +'<button type="button" class="vtBtn" id="vtGo" style="margin-top:14px"'+(on?"":" disabled")+'>Place Order</button><div class="vtRow"><span>Margin Required</span><b data-k="mreq">—</b></div><div class="vtRow"><span>'+L("Biaya spread","Spread cost")+'</span><b data-k="sprd">—</b></div>'}
+function vtPosHtml(a){
+  var tabs='<div class="vtTabs">'+[["open","Open Positions"],["pend","Pending Orders"],["hist","History"]].map(function(k){return'<button type="button" data-pt="'+k[0]+'" class="'+(VT.pt===k[0]?"on":"")+'">'+k[1]+'</button>'}).join("")+'</div>';
+  if(VT.pt==="open"){var ps=Object.keys(a.positions);
+    return tabs+'<div class="vtC"><div class="vtRow"><span>Equity</span><b data-k="eq"></b></div><div class="vtRow"><span>P/L</span><b data-k="pnl"></b></div></div>'+(ps.length?ps.map(function(s){var p=a.positions[s],i=VIX[s],long=p.side==="long";
+      return'<button type="button" class="vtMk" data-pos="'+s+'">'+vtIcon(i)+'<div><b>'+s+' <span class="'+(long?"up":"dn")+'">'+(long?"BUY":"SELL")+'</span></b><small>'+(p.qty/i.cs).toFixed(2)+' lot · '+vtFmt(s,p.entry)+' → <span data-p="'+s+'" data-side="'+p.side+'"></span></small></div><span><b data-pp="'+s+'">—</b></span></button>'}).join("")+'<button type="button" class="vtGh" id="vtCloseAll" style="margin-top:14px">Close All</button>':'<p class="vtRow">'+L("Tidak ada posisi terbuka.","No open positions.")+'</p>')}
+  if(VT.pt==="pend")return tabs+(a.orders.length?a.orders.map(function(o){var i=VIX[o.symbol];return'<div class="vtMk">'+vtIcon(i)+'<div><b>'+o.symbol+' <span class="'+(o.side==="buy"?"up":"dn")+'">'+o.side.toUpperCase()+' LIMIT</span></b><small>'+(o.qty/i.cs).toFixed(2)+' lot @ '+vtFmt(o.symbol,o.price)+'</small></div><button type="button" class="vtTag" data-cx="'+o.id+'">'+L("Batal","Cancel")+'</button></div>'}).join(""):'<p class="vtRow">'+L("Tidak ada order pending.","No pending orders.")+'</p>');
+  var tr=(a.trades||[]).slice(-60).reverse();
+  return tabs+(tr.length?tr.map(function(x){var i=VIX[x.s];return'<div class="vtMk">'+(i?vtIcon(i):"")+'<div><b>'+x.s+' <span class="'+(x.d==="BUY"?"up":"dn")+'">'+x.d+'</span></b><small>'+(i?(x.v/i.cs).toFixed(2):x.v)+' lot · '+vtFmt(x.s,x.o)+' → '+vtFmt(x.s,x.c)+'</small></div><span><b class="'+(x.p>=0?"up":"dn")+'">'+vtM(x.p)+'</b></span></div>'}).join(""):'<p class="vtRow">'+L("Belum ada riwayat.","No history yet.")+'</p>')}
+function vtMoreHtml(a){
+  var rules='<div class="vtRow"><span>Max Daily Drawdown</span><b>'+a.rules.dailyDd+'%</b></div><div class="vtRow"><span>Max Overall Drawdown</span><b>'+a.rules.maxDd+'%'+(a.rules.trailing?" (trailing)":"")+'</b></div>'+(a.target>0?'<div class="vtRow"><span>Profit Target</span><b>'+a.target+'%</b></div><div class="vtRow"><span>Minimum Trading Days</span><b>'+a.minDays+'</b></div>':"");
+  return'<div class="vtC"><div style="display:flex;justify-content:space-between;align-items:center"><b>Challenge</b>'+vtStatusTag(a)+'</div>'+(a.target>0?'<div class="vtRow"><span>'+L("Progres target","Target progress")+'</span><b data-k="pr"></b></div><div class="vtBar"><i data-k="prb" style="width:0"></i></div>':"")
+  +'<div class="vtRow"><span>Account Balance</span><b data-k="bal"></b></div><div class="vtRow"><span>Equity</span><b data-k="eq"></b></div><div class="vtRow"><span>Daily Drawdown</span><b data-k="dd"></b></div><div class="vtRow"><span>Max Drawdown</span><b data-k="md"></b></div>'+(a.target>0?'<div class="vtRow"><span>Trading Days</span><b data-k="days"></b></div>':"")+'</div>'
+  +'<div class="vtC"><h4>Rules</h4>'+rules+'</div>'
+  +'<div class="vtBS"><button type="button" class="vtGh" data-nav="wd">Withdrawal</button><button type="button" class="vtGh" data-nav="cert">'+L("Sertifikat","Certificate")+'</button></div><button type="button" class="vtGh" id="vtBack" style="margin-top:10px">'+L("Kembali ke dashboard","Back to dashboard")+'</button>'}
+/* angka yang berubah tiap detik diperbarui tanpa merender ulang, supaya isian tidak hilang */
+function vtSet(q,v,c){document.querySelectorAll(q).forEach(function(e){e.textContent=v;if(c!==undefined){e.classList.remove("up","dn");if(c)e.classList.add(c)}})}
+function vtPaint(){
+  var a=vtAcc();if(!a)return;var S=vtStat(a),s=S.s,pf=s.equity-a.size,cl=function(x){return x>0.004?"up":x<-0.004?"dn":""};
+  vtSet('[data-k="bal"]',vtM(s.balance));vtSet('[data-k="eq"]',vtM(s.equity));vtSet('[data-k="pnl"]',(pf>0?"+":"")+vtM(pf),cl(pf));vtSet('[data-k="pnl2"]',(pf>0?"+":"")+vtM(pf),cl(pf));
+  if(a.target>0){vtSet('[data-k="pr"]',S.pr.toFixed(1)+"%");vtSet('[data-k="tg"]',vtM(Math.max(0,a.balance-a.size))+" / "+vtM(a.size*a.target/100));document.querySelectorAll('[data-k="prb"]').forEach(function(e){e.style.width=S.pr+"%"})}
+  vtSet('[data-k="dd"]',vtM(s.dailyLoss)+" / "+vtM(s.dailyLimit));vtSet('[data-k="md"]',vtM(s.maxLoss)+" / "+vtM(s.maxLimit));vtSet('[data-k="days"]',S.days+" / "+a.minDays);
+  document.querySelectorAll("[data-p]").forEach(function(e){var id=e.dataset.p,b=VBK[id];if(!b||b.ph)return;var side=e.dataset.side,px=side?(side==="long"?b.bid:b.ask):b.mid;e.textContent=vtFmt(id,px)});
+  document.querySelectorAll("[data-c]").forEach(function(e){var id=e.dataset.c,b=VBK[id],v=vtChg(id);e.textContent=v;e.classList.remove("up","dn");if(b&&!b.closed&&!b.ph)e.classList.add((b.pct||0)>=0?"up":"dn")});
+  document.querySelectorAll("[data-ask]").forEach(function(e){var b=VBK[e.dataset.ask];if(b&&!b.ph)e.textContent=vtFmt(e.dataset.ask,b.ask)});
+  document.querySelectorAll("[data-bid]").forEach(function(e){var b=VBK[e.dataset.bid];if(b&&!b.ph)e.textContent=vtFmt(e.dataset.bid,b.bid)});
+  document.querySelectorAll("[data-m]").forEach(function(e){e.textContent=vtLive(e.dataset.m)?"LIVE":L("Pasar tutup","Market closed")});
+  document.querySelectorAll("[data-pp]").forEach(function(e){var p=s.positions.filter(function(x){return x.symbol===e.dataset.pp})[0];if(!p)return;e.textContent=(p.upnl>0?"+":"")+vtM(p.upnl);e.classList.remove("up","dn");e.classList.add(p.upnl>=0?"up":"dn")});
+  var i=VIX[VT.sym],ml=$("vtLot");if(VT.tab==="trade"&&ml){var b=VBK[i.id],lots=+ml.value||0,px=b&&!b.ph?(VT.side==="buy"?b.ask:b.bid):0;
+    vtSet('[data-k="mreq"]',px&&lots?vtM(lots*i.cs*px*(PE.QC[i.id]?PE.QC[i.id](px):1)/i.lev):"—");vtSet('[data-k="sprd"]',b&&!b.ph&&lots?vtM(lots*i.cs*(b.ask-b.bid)*(PE.QC[i.id]?PE.QC[i.id](b.mid):1)):"—")}
+  var sig=Object.keys(a.positions).join()+a.orders.length+(a.trades||[]).length+a.status;if(VT.tab==="pos"&&sig!==vtSig){vtSig=sig;vtRender()}vtSig=sig}
+/* ---- aksi ---- */
+function vtPrice(){var b=VBK[VT.sym];return b&&!b.ph?(VT.side==="buy"?b.ask:b.bid):0}
+function vtPlace(){
+  var a=vtAcc(),i=VIX[VT.sym],b=VBK[i.id],lots=Math.round((+$("vtLot").value||0)*100)/100;
+  if(!a||a.status!=="active")return vtToast(L("Akun tidak aktif.","Account is not active."),false);
+  if(!vtLive(i.id))return vtToast(L("Pasar tutup atau harga belum tersedia.","Market closed or no price yet."),false);
+  if(!(lots>=0.01&&lots<=50))return vtToast(L("Volume harus 0.01 sampai 50 lot.","Volume must be 0.01 to 50 lots."),false);
+  var buy=VT.side==="buy",lim=VT.ot==="limit",px=lim?+$("vtPx").value:(buy?b.ask:b.bid),sl=+$("vtSl").value||0,tp=+$("vtTp").value||0;
+  if(lim&&!(px>0))return vtToast(L("Isi harga limit.","Enter a limit price."),false);
+  if(lim&&(buy?px>=b.ask:px<=b.bid))return vtToast(buy?L("Buy limit harus di bawah harga beli.","Buy limit must be below the ask."):L("Sell limit harus di atas harga jual.","Sell limit must be above the bid."),false);
+  if(sl&&(buy?sl>=px:sl<=px))return vtToast(L("Stop Loss di sisi yang salah.","Stop Loss is on the wrong side."),false);
+  if(tp&&(buy?tp<=px:tp>=px))return vtToast(L("Take Profit di sisi yang salah.","Take Profit is on the wrong side."),false);
+  var r=PE.placeOrder(a,{symbol:i.id,side:VT.side,qty:Math.round(lots*i.cs*1e8)/1e8,type:VT.ot,price:lim?px:0,sl:sl||0,tp:tp||0},VBK,VCFG);
+  if(!r.ok)return vtToast(L(VERR[r.error]?VERR[r.error][0]:r.error,VERR[r.error]?VERR[r.error][1]:r.error),false);
+  pSave();pPush(true);vtToast(r.filled?(VT.side.toUpperCase()+" "+lots+" "+i.id+" @ "+vtFmt(i.id,r.price)):L("Order limit dipasang.","Limit order placed."),true);vtPosLines()}
+function vtClosePos(s){
+  var a=vtAcc(),p=a&&a.positions[s];if(!p)return;
+  if(!vtLive(s))return vtToast(L("Pasar tutup. Posisi belum bisa ditutup.","Market closed. Cannot close the position yet."),false);
+  var r=PE.placeOrder(a,{symbol:s,side:p.side==="long"?"sell":"buy",qty:p.qty,type:"market",reduceOnly:true},VBK,VCFG);
+  if(!r.ok)return vtToast(r.error,false);pSave();pPush(true);VT.sheet=null;vtRender()}
+function vtSheetOpen(s){
+  var a=vtAcc(),p=a&&a.positions[s];if(!p)return;var i=VIX[s],long=p.side==="long";VT.sheet=s;
+  var d=document.createElement("div");d.className="vtSheet";d.id="vtSheet";
+  d.innerHTML='<div><div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="vtTag '+(long?"g":"r")+'">'+(long?"BUY":"SELL")+'</span><b>'+(p.qty/i.cs).toFixed(2)+' lot '+s+'</b></div><div class="vtRow"><span>Entry Price</span><b>'+vtFmt(s,p.entry)+'</b></div><div class="vtRow"><span>Current Price</span><b data-p="'+s+'" data-side="'+p.side+'"></b></div><div class="vtRow"><span>P/L</span><b data-pp="'+s+'"></b></div><span class="vtLb">Stop Loss</span><input id="shSl" inputmode="decimal" value="'+(p.sl||"")+'"><span class="vtLb">Take Profit</span><input id="shTp" inputmode="decimal" value="'+(p.tp||"")+'"><div class="vtBS" style="margin-top:14px"><button type="button" class="vtGh" id="shClose">Close</button><button type="button" class="vtBtn" id="shMod">Modify</button></div><button type="button" class="vtTag" id="shX" style="width:100%;padding:10px">'+L("Tutup","Dismiss")+'</button></div>';
+  $("vtApp").appendChild(d);vtPaint();
+  $("shX").onclick=function(){d.remove();VT.sheet=null};$("shClose").onclick=function(){d.remove();vtClosePos(s)};
+  $("shMod").onclick=function(){var sl=+$("shSl").value||0,tp=+$("shTp").value||0,b=VBK[s],ref=long?b.bid:b.ask;
+    if(sl&&(long?sl>=ref:sl<=ref))return vtToast(L("Stop Loss di sisi yang salah.","Stop Loss is on the wrong side."),false);
+    if(tp&&(long?tp<=ref:tp>=ref))return vtToast(L("Take Profit di sisi yang salah.","Take Profit is on the wrong side."),false);
+    PE.setStops(a,s,{sl:sl,tp:tp});pSave();pPush(true);d.remove();VT.sheet=null;vtToast(L("SL/TP diperbarui.","SL/TP updated."),true);vtRender()}}
+function vtPickHtml(){
+  var d=document.createElement("div");d.className="vtSheet";d.id="vtPickS";
+  d.innerHTML='<div><b>'+L("Pilih instrumen","Select instrument")+'</b>'+VI.map(function(i){return'<button type="button" class="vtMk" data-pk="'+i.id+'">'+vtIcon(i)+'<div><b>'+i.id+'</b><small>'+esc(i.n)+'</small></div></button>'}).join("")+'</div>';
+  $("vtApp").appendChild(d);d.onclick=function(e){var b=e.target.closest("[data-pk]");if(b){VT.sym=b.dataset.pk;d.remove();vtRender()}else if(e.target===d)d.remove()}}
+function vtBind(a){
+  var A=$("vtApp");$("vtX").onclick=vtShut;
+  A.querySelectorAll(".vtNav [data-vt]").forEach(function(b){b.onclick=function(){VT.tab=b.dataset.vt;vtRender()}});
+  A.querySelectorAll("[data-go]").forEach(function(b){b.onclick=function(){VT.tab=b.dataset.go;vtRender()}});
+  A.querySelectorAll("[data-cat]").forEach(function(b){b.onclick=function(){VT.cat=b.dataset.cat;vtRender()}});
+  A.querySelectorAll("[data-sym]").forEach(function(b){b.onclick=function(){VT.sym=b.dataset.sym;VT.tab="trade";vtRender()}});
+  A.querySelectorAll("[data-pt]").forEach(function(b){b.onclick=function(){VT.pt=b.dataset.pt;vtRender()}});
+  A.querySelectorAll("[data-pos]").forEach(function(b){b.onclick=function(){vtSheetOpen(b.dataset.pos)}});
+  A.querySelectorAll("[data-cx]").forEach(function(b){b.onclick=function(){PE.cancelOrder(a,+b.dataset.cx);pSave();pPush(true);vtRender()}});
+  A.querySelectorAll("[data-nav]").forEach(function(b){b.onclick=function(){view=b.dataset.nav;vtShut()}});
+  var ca=$("vtCloseAll");if(ca)ca.onclick=function(){Object.keys(a.positions).forEach(vtClosePos);vtRender()};
+  var bk=$("vtBack");if(bk)bk.onclick=vtShut;
+  var sel=$("vtSel");if(sel)sel.onchange=function(){VT.acc=sel.value;vtRender()};
+  if(VT.tab!=="trade")return;
+  var st=$("vtStar");if(st)st.onclick=function(){var f=vtFav(),k=f.indexOf(VT.sym);if(k>-1)f.splice(k,1);else f.push(VT.sym);vtFavSet(f);vtRender()};
+  $("vtPick").onclick=vtPickHtml;
+  A.querySelectorAll("[data-tf]").forEach(function(b){b.onclick=function(){VT.tf=+b.dataset.tf;vtRender()}});
+  A.querySelectorAll("[data-side]").forEach(function(b){if(b.dataset.side==="buy"||b.dataset.side==="sell")b.onclick=function(){VT.side=b.dataset.side;vtRender()}});
+  A.querySelectorAll("[data-ot]").forEach(function(b){b.onclick=function(){VT.ot=b.dataset.ot;vtRender()}});
+  A.querySelectorAll("[data-lq]").forEach(function(b){b.onclick=function(){VT.lot=+b.dataset.lq;$("vtLot").value=VT.lot}});
+  A.querySelectorAll("[data-lot]").forEach(function(b){b.onclick=function(){var v=Math.round(((+$("vtLot").value||0)+(b.dataset.lot==="+"?0.01:-0.01))*100)/100;VT.lot=Math.max(0.01,Math.min(50,v));$("vtLot").value=VT.lot}});
+  $("vtLot").oninput=function(){var v=+this.value;if(v>0)VT.lot=v};
+  $("vtGo").onclick=vtPlace}
+function vtRows(){
+  return vtList().map(function(a){if((a.status!=="active")!==(accTab==="inactive"))return"";
+    var eq;try{eq=vtSnap(a).equity}catch(e){eq=a.balance}var pf=eq-a.size,r=a.status==="breached"?'<div class="acc-r"><strong class="dn">'+t("breached")+'</strong><small>Equity '+money(eq)+'</small></div>':a.status==="passed"?'<div class="acc-r"><strong class="up">'+L("Lolos","Passed")+'</strong><small>Equity '+money(eq)+'</small></div>':'<div class="acc-r"><strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+money(Math.abs(pf))+'</strong><small>Equity '+money(eq)+'</small></div>';
+    return'<button type="button" class="acc accv" data-vt="'+esc(a.id)+'"><div><b>'+esc(a.program)+" "+kfmt(a.size)+(a.isFunded?" · Funded":"")+'</b><small>Vekxt Trader | '+(a.phase?t("phase")+" "+a.phase+"/"+a.phases+" | ":"")+'ID '+esc(a.id)+'</small></div>'+r+'<span class="acc-a">&#8250;</span></button>'}).join("")}
+
 function dashHome(){
   var a=curAcc(),home=$("lgHome").href,x=a?"":modeSw();x+=(ACC_API&&accState==="ok")?syncBar():"";
   if(CFG&&user&&!user.verified)return'<div class="lg-card"><b>'+t("verT")+'</b><p>'+t("verMsg")+'</p><div class="lg-msg" id="verMsg" role="alert"></div><button class="lg-btn" type="button" id="verDone">'+t("verDone")+'</button><button class="lg-link" type="button" id="verResend">'+t("verResend")+'</button></div>';
   if(PM==="perp")return perpHome();
+  vtBoot();
   if(a)return x+accDetail(a);
   if(ACC_API&&accState==="loading"){x+=skel()}
   else if(ACC_API&&accState==="err"){x+='<div class="lg-card"><p>'+t("accErr")+(accInfo?" ["+esc(accInfo)+"]":"")+'</p><button type="button" class="lg-btn ghost" id="accRetry">'+t("accRetry")+'</button></div>'}
-  else if(!ACCOUNTS.filter(notPerp).length){x+='<div class="lg-card"><b>'+t("mine")+'</b><p>'+t("none")+'</p><a class="lg-btn" href="'+home+'#plans">'+t("start")+'</a></div>'}
+  else if(!ACCOUNTS.filter(notPerp).length&&!vtList().length){x+='<div class="lg-card"><b>'+t("mine")+'</b><p>'+t("none")+'</p><a class="lg-btn" href="'+home+'#plans">'+t("start")+'</a></div>'}
   else{
-    var CA=ACCOUNTS.filter(notPerp),nA=CA.filter(function(c){return !c.breach}).length,nI=CA.length-nA;
+    var VL=vtList(),CA=ACCOUNTS.filter(notPerp),nA=CA.filter(function(c){return !c.breach}).length+VL.filter(function(c){return c.status==="active"}).length,nI=CA.length+VL.length-nA;
     x+='<div class="lg-tabs" role="group" id="accTabs"><button type="button" data-at="active" aria-pressed="'+(accTab==="active")+'">'+t("tabActive")+' ('+nA+')</button><button type="button" data-at="inactive" aria-pressed="'+(accTab==="inactive")+'">'+t("tabInactive")+' ('+nI+')</button></div>';
     if(accTab==="inactive"?!nI:!nA)x+='<div class="lg-card"><p>'+t("accTabNone")+'</p></div>';
     x+='<p class="acc-hint">'+t("accHint")+'</p>';
     x+=ACCOUNTS.map(function(c,i){if(isPerp(c)||!!c.breach!==(accTab==="inactive"))return"";var pf=c.equity-c.size,r=c.breach?'<div class="acc-r"><strong class="dn">'+t("breached")+'</strong><small>Equity '+money(c.equity)+'</small></div>':c.offline?'<div class="acc-r"><strong>'+t("accOff")+'</strong></div>':'<div class="acc-r"><strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+money(Math.abs(pf))+'</strong><small>Equity '+money(c.equity)+'</small></div>';return'<button type="button" class="acc" data-i="'+i+'"><div><b>'+c.program+" "+kfmt(c.size)+'</b><small>'+(c.phase?t("phase")+" "+c.phase+"/"+c.phases+" | ":"")+'ID '+c.id+'</small></div>'+r+'<span class="acc-a">&#8250;</span></button>'}).join("");
+  x+=vtRows();
   }
-  if(ACCOUNTS.length)x+='<div class="qa"><a class="lg-btn ghost" href="'+home+'#plans">'+t("start")+'</a></div>';
+  if(ACCOUNTS.length||vtList().length)x+='<div class="qa"><a class="lg-btn ghost" href="'+home+'#plans">'+t("start")+'</a></div>';
   return x;
 }
 var view="home",VK=["home","lb","wd","prof","aff","offers","cert"];
@@ -1301,7 +1600,8 @@ function dash(){
   var db=$("dBody"),key=[view,selAcc,accState].join(":"),fresh=key!==animKey;animKey=key;
   db.innerHTML=h;db.classList.toggle("vz-anim",fresh);if($("pTerm"))pAfter();
   document.querySelectorAll(".dnav button").forEach(function(b){b.onclick=function(){view=b.dataset.k;if(view==="home"){selAcc=null;selP=null}dash()}});
-  document.querySelectorAll(".acc").forEach(function(b){b.onclick=function(){selAcc=+b.dataset.i;calY=null;histN=10;dash()}});
+  document.querySelectorAll(".acc:not(.accv)").forEach(function(b){b.onclick=function(){selAcc=+b.dataset.i;calY=null;histN=10;dash()}});
+  document.querySelectorAll(".accv").forEach(function(b){b.onclick=function(){vtOpen(b.dataset.vt)}});
   var ab=$("accBack");if(ab)ab.onclick=function(){selAcc=null;dash()};
   document.querySelectorAll("#accTabs button").forEach(function(b){b.onclick=function(){accTab=b.dataset.at;dash()}});
   var vd=$("verDone");
