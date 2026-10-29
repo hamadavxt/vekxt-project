@@ -1576,15 +1576,27 @@ function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function refCode(e){var h=5381;for(var i=0;i<e.length;i++)h=((h<<5)+h+e.charCodeAt(i))>>>0;return"VZ"+h.toString(36).toUpperCase().slice(0,6)}
 Object.assign(T.id,{"wdAcc":"Pilih akun","wdNoAcc":"Belum ada akun yang bisa withdraw. Akun harus Funded, dan akun Zero Instant harus memenuhi aturan konsistensi 15%. Akun challenge tidak bisa withdraw.","wdFirst":"Entry pertama","wdNext":"Payout berikutnya","wdNoEntry":"Belum ada trade di akun ini. Jadwal payout dihitung dua mingguan sejak entry pertama.","wdWait":"Payout belum terbuka. Jadwal berikutnya:","wdUsed":"Payout siklus ini sudah diajukan. Siklus berikutnya:","wdConsFail":"Aturan konsistensi belum terpenuhi: profit hari terbesar {p}% dari total profit (maks 15%).","wdCons":"Konsistensi","wdOpenNow":"Payout terbuka"});Object.assign(T.en,{"wdAcc":"Select account","wdNoAcc":"No account can withdraw yet. An account must be Funded, and Zero Instant accounts must meet the 15% consistency rule. Challenge accounts cannot withdraw.","wdFirst":"First entry","wdNext":"Next payout","wdNoEntry":"No trades on this account yet. The biweekly payout schedule counts from the first entry.","wdWait":"Payout is not open yet. Next date:","wdUsed":"This cycle's payout was already requested. Next cycle:","wdConsFail":"Consistency rule not met: your best day is {p}% of total profit (max 15%).","wdCons":"Consistency","wdOpenNow":"Payout open"});
 Object.assign(T.id,{"wdConsHint":"Profit hari terbesar dibanding total profit. Maksimal 15% agar bisa withdraw.","wdBankPick":"Pilih bank","wdBankOther":"Bank lain...","wdBankOtherLbl":"Nama bank lainnya"});Object.assign(T.en,{"wdConsHint":"Best day compared to total profit. Maximum 15% to be able to withdraw.","wdBankPick":"Select bank","wdBankOther":"Other bank...","wdBankOtherLbl":"Other bank name"});
-Object.assign(T.id,{"n_lb":"Leaderboard","lbT":"Leaderboard trader","lbYou":"Peringkat kamu","lbLoad":"Memuat...","lbErr":"Leaderboard belum bisa dimuat. Coba lagi nanti.","lbNone":"Belum ada data. Daftar muncul setelah ada akun funded.","lbNo":"Kamu belum masuk daftar. Hanya akun funded yang dihitung.","lbNote":"Peringkat 1, 2, dan seterusnya diurutkan dari persentase return tertinggi akun funded. Diperbarui tiap beberapa menit. Nama disamarkan.","eqT":"Equity curve","eqNone":"Belum ada trade. Kurva muncul setelah ada hasil.","eqLow":"Terendah","eqHigh":"Tertinggi","eqNote":"Dihitung per hari dari profit yang sudah tertutup; titik terakhir adalah equity saat ini.","wdMin":"Minimal penarikan 50 USD.","affDesc":"Bagikan kupon kamu. Pembeli dapat diskon {d}% dan kamu dapat komisi {c}% dari nilai pembayaran mereka.","affLoad":"Menyiapkan kupon kamu...","affErr":"Kupon belum bisa dimuat. Coba lagi nanti.","affCoupon":"Kode kupon kamu","affSales":"Pembelian","affNote2":"Komisi dihitung dari pembayaran setelah diskon. Pembelian oleh akun kamu sendiri tidak dihitung."});
-Object.assign(T.en,{"n_lb":"Leaderboard","lbT":"Trader leaderboard","lbYou":"Your rank","lbLoad":"Loading...","lbErr":"Could not load the leaderboard. Try again later.","lbNone":"No data yet. The list appears once there are funded accounts.","lbNo":"You are not on the list. Only funded accounts count.","lbNote":"Ranked 1, 2, and so on by the highest return percentage of funded accounts. Updated every few minutes. Names are masked.","eqT":"Equity curve","eqNone":"No trades yet. The curve appears after the first results.","eqLow":"Low","eqHigh":"High","eqNote":"Calculated per day from closed profit; the last point is the current equity.","wdMin":"Minimum withdrawal is 50 USD.","affDesc":"Share your coupon. Buyers get {d}% off and you earn {c}% commission on what they pay.","affLoad":"Preparing your coupon...","affErr":"Could not load your coupon. Try again later.","affCoupon":"Your coupon code","affSales":"Purchases","affNote2":"Commission is calculated on the payment after discount. Purchases by your own account are not counted."});
+Object.assign(T.id,{"n_lb":"Leaderboard","lbT":"Leaderboard trader","lbYou":"Peringkat kamu","lbLoad":"Memuat...","lbErr":"Leaderboard belum bisa dimuat. Coba lagi nanti.","lbNone":"Belum ada data. Daftar muncul setelah ada akun aktif.","lbNo":"Kamu belum masuk daftar. Hanya akun aktif yang dihitung.","lbNote":"Peringkat diurutkan dari persentase profit tertinggi semua jenis akun (CFD, Perps, Vekxt Trader). Nama = username profil. Diperbarui tiap beberapa menit.","eqT":"Equity curve","eqNone":"Belum ada trade. Kurva muncul setelah ada hasil.","eqLow":"Terendah","eqHigh":"Tertinggi","eqNote":"Dihitung per hari dari profit yang sudah tertutup; titik terakhir adalah equity saat ini.","wdMin":"Minimal penarikan 50 USD.","affDesc":"Bagikan kupon kamu. Pembeli dapat diskon {d}% dan kamu dapat komisi {c}% dari nilai pembayaran mereka.","affLoad":"Menyiapkan kupon kamu...","affErr":"Kupon belum bisa dimuat. Coba lagi nanti.","affCoupon":"Kode kupon kamu","affSales":"Pembelian","affNote2":"Komisi dihitung dari pembayaran setelah diskon. Pembelian oleh akun kamu sendiri tidak dihitung."});
+Object.assign(T.en,{"n_lb":"Leaderboard","lbT":"Trader leaderboard","lbYou":"Your rank","lbLoad":"Loading...","lbErr":"Could not load the leaderboard. Try again later.","lbNone":"No data yet. The list appears once there are active accounts.","lbNo":"You are not on the list. Only active accounts count.","lbNote":"Ranked by the highest profit percentage across all account types (CFD, Perps, Vekxt Trader). Name = profile username. Updated every few minutes.","eqT":"Equity curve","eqNone":"No trades yet. The curve appears after the first results.","eqLow":"Low","eqHigh":"High","eqNote":"Calculated per day from closed profit; the last point is the current equity.","wdMin":"Minimum withdrawal is 50 USD.","affDesc":"Share your coupon. Buyers get {d}% off and you earn {c}% commission on what they pay.","affLoad":"Preparing your coupon...","affErr":"Could not load your coupon. Try again later.","affCoupon":"Your coupon code","affSales":"Purchases","affNote2":"Commission is calculated on the payment after discount. Purchases by your own account are not counted."});
 Object.assign(T.id,{"wdClosedT":"Penarikan ditutup","wdClosed":"Kamu sudah mengajukan penarikan untuk periode ini. Penarikan berikutnya bisa diajukan mulai {d}."});Object.assign(T.en,{"wdClosedT":"Withdrawal closed","wdClosed":"You have already requested a withdrawal for this period. The next one can be requested from {d}."});
 var wdAcc=null,pWdBusy=false;
-function pWdOne(a){var lg=PE.ledger(a),w=0;
-  wdList.forEach(function(r){if(r.accId===a.id&&!r.test&&r.status!=="rejected"&&r.status!=="cancelled")w+=Number(r.amt)||0});   /* profit yang sudah diajukan tidak bisa diajukan lagi */
-  return{unlock:null,id:a.id,program:a.program,phase:null,phases:null,size:a.size,equity:a.balance-w,pnl:lg.pnl,firstEntry:String(lg.firstEntry||"").slice(0,10),funded:true,offline:false,breach:false,perp:true,fundedDate:a.fundedDate||"",certId:a.certId||"",days:lg.days}}
-function pFundedLoad(){pLoadAll();if(user&&pFsState==="idle"&&!pWdBusy){pWdBusy=true;pRemoteLoad(function(){pWdBusy=false;pHeal();pSave();if(view==="wd"||view==="cert")setTimeout(dash,0)})}}
-function pWdList(){pFundedLoad();return PERPS.filter(function(a){return a.isFunded&&a.status==="active"}).map(pWdOne)}
+var entUnl={},entAt=0;
+function entFetch(){if(!user||Date.now()-entAt<60000)return;entAt=Date.now();apiPost({action:"ent_state"},function(d){entUnl=(d&&d.unlock)||{};if(view==="wd")setTimeout(dash,0)},function(){entAt=0})}
+function entKey(a){return a.vt?(a.base||a.id):String(a.id).replace(/^PF-/,"PP-")}
+function pUnlock(a){var u=entUnl[entKey(a)];return u&&Number(u.until)>Date.now()?{until:Number(u.until),max:Number(u.max)||10}:null}
+function pWdOne(a){var lg=PE.ledger(a);
+  return{unlock:pUnlock(a),id:a.id,program:a.program,phase:null,phases:null,size:a.size,equity:a.balance,pnl:lg.pnl,firstEntry:String(lg.firstEntry||"").slice(0,10),funded:true,offline:false,breach:false,perp:true,fundedDate:a.fundedDate||"",certId:a.certId||"",days:lg.days}}
+function pFundedLoad(){pLoadAll();entFetch();if(user&&pFsState==="idle"&&!pWdBusy){pWdBusy=true;pRemoteLoad(function(){pWdBusy=false;pHeal();pSave();if(view==="wd"||view==="cert")setTimeout(dash,0)})}}
+function pWdList(){pFundedLoad();return PERPS.filter(function(a){return a.status==="active"&&(a.isFunded||pUnlock(a))}).map(pWdOne)}
+/* saldo akun simulasi (Perps / Vekxt Trader) langsung dikurangi sebesar nominal withdraw; ditolak admin = dikembalikan */
+function pWdDeduct(id,amt,ref){var a=null;PERPS.forEach(function(x){if(x.id===id)a=x});amt=Number(amt);if(!a||!(amt>0))return;
+  var q=function(v){return Math.round(v*1e8)/1e8};
+  a.balance=q(a.balance-amt);if(a.day&&isFinite(a.day.startBal))a.day.startBal=q(a.day.startBal-amt);if(isFinite(a.peak))a.peak=q(a.peak-amt);
+  a.wdTot=Math.round(((a.wdTot||0)+amt)*100)/100;(a.wd=a.wd||[]).push({ref:String(ref||""),amt:amt,at:Date.now()});pSave();pPush(true)}
+function wdDeduct(ca,rec,ref){if(ca&&ca.perp&&!rec.test)pWdDeduct(ca.id,rec.amt,ref)}
+function wdReconcile(){var ch=false;PERPS.forEach(function(a){(a.wd||[]).forEach(function(e){if(e.rf||!e.ref||e.ref==="local")return;
+  var r=null;wdList.forEach(function(x){if(x.id===e.ref)r=x});if(!r||r.status!=="rejected")return;
+  a.balance+=e.amt;if(a.day)a.day.startBal+=e.amt;a.peak+=e.amt;a.wdTot=Math.max(0,Math.round(((a.wdTot||0)-e.amt)*100)/100);e.rf=1;ch=true})});if(ch){pSave();pPush(true)}}
 function pCertList(){pFundedLoad();return PERPS.filter(function(a){return a.isFunded}).map(pWdOne)}
 function wdAll(){return ACCOUNTS.concat(pWdList())}
 function wdIsInst(a){return /zero|instan/i.test(String(a.program||""))}
@@ -1611,8 +1623,8 @@ function loadWd(){
   if(CFG&&fs&&user&&user.uid){
     wdState="loading";
     fs.collection("withdrawals").where("uid","==",user.uid).get().then(function(q){
-      wdList=q.docs.map(function(d){var r=d.data(),ts=r.createdAt&&r.createdAt.toDate?r.createdAt.toDate():new Date();return Object.assign({},r,{d:ts.toISOString().slice(0,10),ts:ts.getTime()})}).sort(function(a,b){return b.ts-a.ts});
-      wdState="ok";dash();
+      wdList=q.docs.map(function(d){var r=d.data(),ts=r.createdAt&&r.createdAt.toDate?r.createdAt.toDate():new Date();return Object.assign({},r,{id:d.id,d:ts.toISOString().slice(0,10),ts:ts.getTime()})}).sort(function(a,b){return b.ts-a.ts});
+      wdReconcile();wdState="ok";dash();
     }).catch(function(){wdList=[];wdState="ok";dash()});
   }else{wdList=ls("vz_wd_"+user.email,[]).slice().reverse();wdState="ok"}
 }
@@ -1677,8 +1689,8 @@ function viewAff(){
   return h;
 }
 function lbRow(r,me){
-  var rk=r.rank,col=rk===1?"#F5B84B":rk===2?"#C0C6CF":rk===3?"#CD7F32":"var(--muted)",up=r.pct>=0;
-  return'<div class="lbr'+(me?" me":"")+'"><span class="lbn" style="color:'+col+'">'+rk+'</span><div><b>'+esc(r.n)+'</b><small>'+esc(r.p)+" "+kfmt(r.s)+'</small></div><strong class="'+(up?"up":"dn")+'">'+(up?"+":"")+r.pct.toFixed(2)+'%</strong></div>';
+  var rk=r.rank,col=rk===1?"#F5B84B":rk===2?"#C0C6CF":rk===3?"#CD7F32":"var(--muted)",up=r.pct>=0,ct=r.c?esc(r.c)+" \u00b7 ":"";
+  return'<div class="lbr'+(me?" me":"")+'"><span class="lbn" style="color:'+col+'">'+rk+'</span><div><b>'+esc(r.n)+'</b><small>'+ct+esc(r.p)+" "+kfmt(r.s)+(r.k==="perp"?" USDT":"")+'</small></div><strong class="'+(up?"up":"dn")+'">'+(up?"+":"")+r.pct.toFixed(2)+'%</strong></div>';
 }
 function viewLb(){
   if(lbState==="idle"||lbState==="loading")return'<div class="lg-card"><b>'+t("lbT")+'</b><p style="margin-top:8px">'+t("lbLoad")+'</p></div>';
@@ -1795,7 +1807,17 @@ function viewCert(){
     return'<div class="lg-card"><div class="dtop"><div><b>'+a.program+" "+kfmt(a.size)+'</b><p>ID '+a.id+'</p></div><span class="tag">'+t("ceFunded")+'</span></div><a class="lg-btn" href="'+u+'" target="_blank" rel="noopener">'+t("ceView")+'</a></div>';
   }).join("");
 }
+function lbReportMaybe(){
+  if(!user||!ACC_API||prof===null)return;
+  var k="vzLbRep:"+user.email,last=0;try{last=+localStorage.getItem(k)||0}catch(e){}
+  if(Date.now()-last<1800000)return;
+  pLoadAll();if(pFsState==="idle"){vtBoot();return}
+  if(pFsState!=="ok")return;
+  var acc=[];PERPS.forEach(function(a){if(a.status!=="active")return;acc.push({p:a.program,s:a.size,pct:(a.balance+(a.wdTot||0)-a.size)/a.size*100,k:a.vt?"vt":"perp",f:a.isFunded?1:0})});
+  try{localStorage.setItem(k,String(Date.now()))}catch(e){}
+  apiPost({action:"lb_report",accounts:acc,profile:{n:user.name,c:(prof&&prof.country)||""}},function(){},function(){try{localStorage.removeItem(k)}catch(e){}})}
 function dash(){
+  try{lbReportMaybe()}catch(e){}
   if(selAcc!==lastSel){lastSel=selAcc;credShow=false}
   var h='<div class="lg-tabs dnav" role="group">'+VK.map(function(k){return'<button type="button" data-k="'+k+'" aria-pressed="'+(view===k)+'">'+t("n_"+k)+'</button>'}).join("")+'</div>';
   if(view==="wd"&&wdState==="idle")loadWd();
@@ -1849,9 +1871,9 @@ function dash(){
     if(CFG&&fs&&user.uid){
       rec.uid=user.uid;
       var col=fs.collection("withdrawals"),ref=rec.test?col.doc():col.doc(user.uid+"_"+String(ca.id).replace(/[^\w-]/g,"")+"_"+rec.cyc);   /* id tetap per akun+siklus: kirim dobel tidak bisa membuat dua dokumen */
-      ref.set(Object.assign({createdAt:firebase.firestore.FieldValue.serverTimestamp()},rec)).then(done).catch(fail);
+      ref.set(Object.assign({createdAt:firebase.firestore.FieldValue.serverTimestamp()},rec)).then(function(){wdDeduct(ca,rec,ref.id);done()}).catch(fail);
     }else{
-      var k="vz_wd_"+user.email,w=ls(k,[]);rec.d=new Date().toISOString().slice(0,10);w.push(rec);ss(k,w);done();
+      var k="vz_wd_"+user.email,w=ls(k,[]);rec.d=new Date().toISOString().slice(0,10);w.push(rec);ss(k,w);wdDeduct(ca,rec,"local");done();
     }
   };
   var po=$("pfOut");if(po)po.onclick=function(){var ob=$("dOut");if(ob)ob.click()};
