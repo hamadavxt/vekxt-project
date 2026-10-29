@@ -140,7 +140,7 @@ function credCard(a){
   };
   return'<div class="lg-card"><div class="dtop" style="margin-bottom:0"><b>'+t("crT")+'</b><span class="tag">'+esc(c.platform)+'</span></div>'+r("login",t("crLogin"),c.login)+r("pass",t("crPass"),c.pass,1)+r("server",t("crServer"),c.server)+'<p class="cr-n">'+t("crNote")+'</p></div>';
 }
-function money(n){return "$"+Math.round(n).toLocaleString("en-US")}
+function money(n){return Math.round(n).toLocaleString("en-US")+" USD"}
 function row(l,v,p){p=isFinite(p)?Math.max(0,Math.min(100,p)):0;return '<div class="rw"><div class="rl"><span>'+l+'</span><span>'+v+'</span></div><div class="bar"><i style="width:'+p+'%"></i></div></div>'}
 var calY=null,calM=null;
 function pfmt(v){var a=Math.abs(v);return(v>0?"+":v<0?"-":"")+(a>=1000?(a/1000).toFixed(1).replace(/\.0$/,"")+"k":String(Math.round(a)))}
@@ -165,7 +165,7 @@ function calCard(a){
 }
 function kfmt(n){return n>=1000?(n/1000)+"K":String(n)}
 var histN=10;
-function pm(v){return(v>0?"+":v<0?"-":"")+"$"+Math.abs(v).toFixed(2)}
+function pm(v){return(v>0?"+":v<0?"-":"")+Math.abs(v).toFixed(2)+" USD"}
 function statsCard(a){
   var s=a.stats;
   if(!s||!s.trades)return'<div class="lg-card"><b>'+t("stT")+'</b><p>'+t("stNone")+'</p></div>';
@@ -1086,7 +1086,7 @@ function vtFav(){try{var f=JSON.parse(localStorage.getItem("vtFav")||"null");if(
 function vtFavSet(f){try{localStorage.setItem("vtFav",JSON.stringify(f))}catch(e){}}
 function vtLive(id){var b=VBK[id];return !!b&&!b.closed&&!b.ph&&Date.now()-b.rx<90000}
 function vtFmt(id,p){var i=VIX[id];return(+p).toFixed(i?i.d:2)}
-function vtM(n){n=+n||0;return(n<0?"-":"")+"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function vtM(n){n=+n||0;return(n<0?"-":"")+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+" USD"}
 function vtEnsure(a){Object.keys(a.positions).forEach(function(s){if(!VBK[s]){var p=a.positions[s];VBK[s]={bid:p.entry,ask:p.entry,mid:p.entry,pct:0,ts:0,rx:0,closed:true,ph:1}}})}
 function vtSnap(a){vtEnsure(a);return PE.snapshot(a,VBK)}
 function vtNewAcc(base,id,pk,size,phase,funded){
@@ -1248,10 +1248,12 @@ function vtLvl(){
   a.orders.forEach(function(o){if(o.symbol===id)it.push({k:"o"+o.id,price:o.price,color:"#4C8DFF",st:1,title:"LIMIT "+o.side.toUpperCase()})});
   return it}
 function vtSyncLines(){
-  if(!vtCs||vtDrag)return;var it=vtLvl(),sig=JSON.stringify(it.map(function(x){return[x.k,x.price,x.color,x.st]}));
-  if(sig!==vtLsig){vtLines.forEach(function(l){try{vtCs.removePriceLine(l.h)}catch(e){}});
-    vtLines=it.map(function(x){return{k:x.k,price:x.price,t:x.title,h:vtCs.createPriceLine({price:x.price,color:x.color,lineWidth:(x.k==="entry"||x.k==="sl"||x.k==="tp")?2:1,lineStyle:x.st,axisLabelVisible:true,title:x.title})}});
-    vtLsig=sig;vtStopsUI()}
+  if(!vtCs||vtDrag)return;var it=vtLvl(),sig=JSON.stringify(it.map(function(x){return[x.k,x.price,x.color,x.st]})),sk=JSON.stringify(it.map(function(x){return[x.k,x.color,x.st]}));
+  if(sig!==vtLsig){
+    if(sk===vtLsk&&vtLines.length===it.length){it.forEach(function(x,j){var l=vtLines[j];l.price=x.price;l.t=x.title;l.h.applyOptions({price:x.price,title:x.title})});vtLsig=sig;vtStopsUI()}   /* ubah harga tanpa membuat ulang garis, jadi tidak berkedip */
+    else{vtLines.forEach(function(l){try{vtCs.removePriceLine(l.h)}catch(e){}});
+      vtLines=it.map(function(x){return{k:x.k,price:x.price,t:x.title,h:vtCs.createPriceLine({price:x.price,color:x.color,lineWidth:(x.k==="entry"||x.k==="sl"||x.k==="tp")?2:1,lineStyle:x.st,axisLabelVisible:true,title:x.title})}});
+      vtLsig=sig;vtLsk=sk;vtStopsUI()}}
   else it.forEach(function(x,j){var l=vtLines[j];if(l&&l.t!==x.title){l.t=x.title;l.h.applyOptions({title:x.title})}})}
 function vtRound(id,v){return+(+v).toFixed(VIX[id].d)}
 function vtRef(p){var b=VBK[p.symbol];return b&&!b.ph?(p.side==="long"?b.bid:b.ask):p.entry}
@@ -1287,19 +1289,24 @@ function vtStopsUI(){
   var d=VIX[id].d,f=function(k,v){return v?'<button type="button" class="'+k+'" data-rm="'+k+'">'+k.toUpperCase()+" "+(+v).toFixed(d)+' \u00d7</button>':'<button type="button" class="'+k+'" data-st="'+k+'">+'+k.toUpperCase()+'</button>'};
   e.innerHTML=on&&(p||!VT.inst)?f("sl",sl)+f("tp",tp):"";
   var h=$("vtHint");if(h)h.textContent=p?((sl||tp)?L("Geser garis SL/TP di chart untuk mengubah.","Drag the SL/TP lines on the chart to change them."):L("Tap garis ENTRY di chart untuk pasang SL/TP, lalu geser.","Tap the ENTRY line on the chart to add SL/TP, then drag.")):(VT.inst?L("Instan aktif: ketuk BUY/SELL, lalu tap garis ENTRY di chart untuk pasang SL/TP.","Instant on: tap BUY/SELL, then tap the ENTRY line on the chart to add SL/TP."):L("Tap +SL / +TP, lalu geser garisnya di chart.","Tap +SL / +TP, then drag the lines on the chart."))}
+var vtRaf=0,vtLY=0,vtLsk="";
 function vtBindDrag(el){
   var KD={sl:1,tp:1},KE={entry:1};
   var yOf=function(e){return e.clientY-el.getBoundingClientRect().top};
+  el.style.touchAction="none";
   el.addEventListener("pointerdown",function(e){
-    if(!vtCs)return;var y=yOf(e),tol=e.pointerType==="touch"?24:12,hit=vtNear(y,KD,tol);
-    if(hit){vtDrag={l:hit,price:0};vtLock(false);try{el.setPointerCapture(e.pointerId)}catch(x){}e.preventDefault();return}
+    if(!vtCs)return;var y=yOf(e),tol=e.pointerType==="touch"?30:12,hit=vtNear(y,KD,tol);
+    if(hit){var c=vtCs.priceToCoordinate(hit.price);vtDrag={l:hit,price:0,off:c===null?0:y-c};vtLY=y;vtLock(false);try{hit.h.applyOptions({lineWidth:3})}catch(x){}try{el.setPointerCapture(e.pointerId)}catch(x){}e.preventDefault();return}
     vtTap=vtNear(y,KE,tol)?{x:e.clientX,y:e.clientY,t:Date.now()}:null},true);
+  /* satu pembaruan per frame, garis mengikuti jari tanpa lompat (selisih jari-garis dijaga) */
+  var frame=function(){vtRaf=0;if(!vtDrag)return;var v=vtCs.coordinateToPrice(vtLY-vtDrag.off);
+    if(v>0){var pr=vtRound(VT.sym,v);if(pr!==vtDrag.price){vtDrag.price=pr;vtDrag.l.h.applyOptions({price:pr,title:vtLvlTitle(vtDrag.l.k,pr)})}}};
   el.addEventListener("pointermove",function(e){
-    if(!vtDrag)return;var v=vtCs.coordinateToPrice(yOf(e));
-    if(v>0){vtDrag.price=vtRound(VT.sym,v);vtDrag.l.h.applyOptions({price:vtDrag.price,title:vtLvlTitle(vtDrag.l.k,vtDrag.price)})}
-    e.preventDefault()},true);
+    if(!vtDrag)return;var ce=e.getCoalescedEvents?e.getCoalescedEvents():null,q=ce&&ce.length?ce[ce.length-1]:e;vtLY=yOf(q);e.preventDefault();
+    if(!vtRaf)vtRaf=requestAnimationFrame(frame)},true);
+  el.addEventListener("touchmove",function(e){if(vtDrag)e.preventDefault()},{passive:false,capture:true});
   var end=function(e){
-    if(vtDrag){var d=vtDrag;vtDrag=null;vtLock(true);if(d.price>0)vtApplyLvl(d.l.k,d.price);else vtLsig="";vtSyncLines();vtStopsUI();return}
+    if(vtDrag){var d=vtDrag;vtDrag=null;if(vtRaf){cancelAnimationFrame(vtRaf);vtRaf=0}try{d.l.h.applyOptions({lineWidth:2})}catch(x){}vtLock(true);if(d.price>0)vtApplyLvl(d.l.k,d.price);else vtLsig="";vtSyncLines();vtStopsUI();return}
     if(vtTap){var t=vtTap;vtTap=null;if(Date.now()-t.t<600&&Math.hypot(e.clientX-t.x,e.clientY-t.y)<10)vtStopsFromEntry()}};
   el.addEventListener("pointerup",end,true);el.addEventListener("pointercancel",end,true)}
 /* ---- UI ---- */
@@ -1320,17 +1327,17 @@ function vtCss(){
   +".vtBar{height:8px;background:#1b1e24;border-radius:99px;overflow:hidden}.vtBar i{display:block;height:100%;background:var(--up);border-radius:99px}.vtTabs{display:flex;gap:6px;overflow:auto;margin-bottom:10px}.vtTabs button{background:none;border:0;padding:8px 12px;color:var(--mu);border-radius:99px;white-space:nowrap}.vtTabs button.on{background:var(--ac);color:#080A0D;font-weight:700}"
   +".vtMk{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;border-bottom:1px solid #15171c;padding:12px 2px;text-align:left}.vtMk div{flex:1;min-width:0}.vtMk small{display:block;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vtMk span:last-child{text-align:right;font-variant-numeric:tabular-nums}.vtIc{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#080A0D;flex:none}"
   +".vtBS{display:flex;gap:10px;margin:10px 0}.vtBS button{flex:1;border:0;border-radius:10px;padding:12px;font-weight:700;color:#fff}.vtBuy{background:#22C55E}.vtSell{background:#F04452}.vtBS .vtBuy,.vtStick .vtBuy{color:#06140D}.vtBS small{display:block;font-weight:500;opacity:.9}.vtOff{opacity:.35}"
-  +".vtBtn{width:100%;border:0;border-radius:10px;padding:14px;font-weight:700;background:var(--ac);color:#080A0D}.vtGh{width:100%;border:1px solid var(--ac);background:none;border-radius:10px;padding:13px;color:var(--ac);font-weight:700}.vtChw{flex:1;min-height:140px;margin:6px 0;position:relative}.vtChw #vtCh{position:absolute;inset:0}.vtLot{display:flex;gap:8px}.vtLot button{width:46px;border:1px solid var(--ln);background:#0d0f13;border-radius:10px;font-size:20px}"
+  +".vtBtn{width:100%;border:0;border-radius:10px;padding:14px;font-weight:700;background:var(--ac);color:#080A0D}.vtGh{width:100%;border:1px solid var(--ac);background:none;border-radius:10px;padding:13px;color:var(--ac);font-weight:700}.vtChw{flex:1;min-height:140px;margin:0;position:relative;touch-action:none}.vtChw #vtCh{position:absolute;inset:0}.vtLot{display:flex;gap:8px}.vtLot button{width:46px;border:1px solid var(--ln);background:#0d0f13;border-radius:10px;font-size:20px}"
   +".vtCh{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}.vtCh button{background:#0d0f13;border:1px solid var(--ln);border-radius:8px;padding:7px 11px;color:var(--mu)}.vtCh button.on{border-color:var(--ac);color:var(--ac)}.vtLb{color:var(--mu);font-size:12px;margin:12px 0 5px;display:block}.vtTag{font-size:11px;padding:3px 8px;border-radius:99px;border:1px solid var(--ln);color:var(--mu)}.vtTag.g{color:var(--up);border-color:var(--up)}.vtTag.r{color:var(--dn);border-color:var(--dn)}"
   +".vtSheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:2}.vtSheet>div{background:#0f1116;width:100%;border-radius:18px 18px 0 0;padding:16px;max-height:88%;overflow:auto;border-top:1px solid var(--ln)}.vtToast{position:fixed;left:14px;right:14px;top:calc(12px + env(safe-area-inset-top));z-index:400;padding:12px 14px;border-radius:12px;background:#111318;border:1px solid var(--ln);display:none}.vtToast.on{display:block}.vtToast.ok{border-color:var(--up)}.vtToast.no{border-color:var(--dn)}"
-  +".vtBd.vtT{padding:8px 14px 0;max-width:1320px;width:100%;margin:0 auto;display:flex;flex-direction:column;overflow:hidden}.vtSym{display:flex;align-items:center;gap:10px}.vtGrid{display:flex;flex-direction:column;flex:1;min-height:0}.vtL{display:flex;flex-direction:column;flex:1;min-height:0}"
-  +"@media(max-width:899px){.vtChw{margin:6px -14px}}"
+  +".vtBd.vtT{padding:0;max-width:1320px;width:100%;margin:0 auto;display:flex;flex-direction:column;overflow:hidden}.vtSym{display:flex;align-items:center;gap:10px}.vtGrid{display:flex;flex-direction:column;flex:1;min-height:0}.vtL{display:flex;flex-direction:column;flex:1;min-height:0}"
+  +""
   +""
   +"#vtApp button.vtTag{background:#191B21;color:#F5F5F5}.vtStops{display:flex;gap:8px;flex-wrap:wrap;min-height:34px;align-items:center;margin:4px 0}.vtStops button{background:#0d0f13;border:1px solid var(--ln);border-radius:99px;padding:7px 14px;font-size:13px;font-weight:600}.vtStops .sl{border-color:var(--dn);color:var(--dn)}.vtStops .tp{border-color:var(--up);color:var(--up)}.vtHint{color:var(--mu);font-size:12px;margin:2px 0 8px}"
-  +".vtStick{position:relative;flex:none;z-index:3;margin:8px -14px 0;padding:10px 14px;background:#080A0D;border-top:1px solid var(--ln);display:flex;gap:8px;align-items:stretch}.vtStick.inst{border-top-color:var(--ac)}"
+  +".vtStick{position:relative;flex:none;z-index:3;margin:0;padding:8px 10px;background:#080A0D;border-top:1px solid var(--ln);display:flex;gap:8px;align-items:stretch}.vtStick.inst{border-top-color:var(--ac)}"
   +".vtStick .vtSd{flex:1;border:0;border-radius:12px;padding:10px 6px;font-weight:700;font-size:16px;color:#fff;min-height:56px}.vtStick .vtSd small{display:block;font-weight:600;font-size:13px;opacity:.9;font-variant-numeric:tabular-nums}.vtStick.inst .vtOff{opacity:1}.vtStick .vtOff{opacity:.4}"
   +".vtLotB{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:118px}.vtLotB>div{display:flex;align-items:center;gap:4px}.vtLotB>div button{width:32px;height:32px;border:1px solid var(--ln);background:#0d0f13;border-radius:9px;font-size:18px;line-height:1;padding:0}.vtLotB input{width:56px;text-align:center;padding:6px 2px;border-radius:9px}"
-  +".vtInstB{display:flex;align-items:center;gap:7px;background:none;border:0;color:var(--mu);font-size:12px;font-weight:600;padding:0}.vtInstB.on{color:var(--ac)}.vtSw{position:relative;display:inline-block;width:34px;height:19px;border-radius:99px;background:#292B32}.vtSw:after{content:\"\";position:absolute;top:3px;left:3px;width:13px;height:13px;border-radius:50%;background:#A1A1AA;transition:left .15s}.vtSw.on{background:var(--ac)}.vtSw.on:after{left:18px;background:#080A0D}#vtApp .vtLotB input{width:56px;padding:6px 2px}.vtStick .vtSd{min-width:0;white-space:nowrap;padding:8px 4px}.vtLotB{flex:0 0 auto}#vtApp input[type=color]{width:46px;height:34px;padding:2px;border-radius:8px}#vtApp input[type=range]{padding:0;border:0;background:none}.vtCfgRow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #15171c}.vtPre{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.vtPre button{display:flex;align-items:center;gap:6px;background:#0d0f13;border:1px solid var(--ln);border-radius:10px;padding:8px 10px}.vtPre button.vtSel{border-color:var(--ac);color:var(--ac)}.vtPre i{width:12px;height:12px;border-radius:3px;display:inline-block}#vtCfgB{background:#0d0f13;border:1px solid var(--ln);border-radius:8px;padding:7px 11px;color:var(--mu)}";
+  +".vtInstB{display:flex;align-items:center;gap:7px;background:none;border:0;color:var(--mu);font-size:12px;font-weight:600;padding:0}.vtInstB.on{color:var(--ac)}.vtSw{position:relative;display:inline-block;width:34px;height:19px;border-radius:99px;background:#292B32}.vtSw:after{content:\"\";position:absolute;top:3px;left:3px;width:13px;height:13px;border-radius:50%;background:#A1A1AA;transition:left .15s}.vtSw.on{background:var(--ac)}.vtSw.on:after{left:18px;background:#080A0D}#vtApp .vtLotB input{width:56px;padding:6px 2px}.vtStick .vtSd{min-width:0;white-space:nowrap;padding:8px 4px}.vtLotB{flex:0 0 auto}.vtTop{display:flex;align-items:center;gap:6px;padding:6px 10px;flex:none}.vtSymB{background:none;border:0;font-size:16px;padding:4px 2px}.vtPxB{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.vtChgB{font-size:12px}#vtApp .vtIcB{background:none;border:0;font-size:20px;line-height:1;padding:4px 6px;color:var(--mu)}.vtTfR{display:flex;align-items:center;gap:4px;padding:0 10px 4px;flex:none;overflow:auto}.vtTfR button{background:none;border:1px solid transparent;border-radius:8px;padding:5px 9px;color:var(--mu);font-size:12px;flex:none}.vtTfR button.on{border-color:var(--ac);color:var(--ac)}.vtNm{margin-left:auto;padding-left:8px;color:var(--mu);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%}.vtChw .vtStops{position:absolute;left:8px;top:8px;z-index:3;margin:0;min-height:0;gap:6px}.vtChw .vtStops button{padding:4px 10px;font-size:12px;background:rgba(13,15,19,.85)}#vtNote{position:absolute;left:8px;bottom:6px;font-size:10px;color:var(--mu);z-index:2;pointer-events:none;max-width:70%}.vtStick .vtSd{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:6px 12px;font-size:11px;min-height:54px;opacity:1}.vtStick .vtBuy{align-items:flex-end}.vtStick .vtSd small{font-size:19px;font-weight:700;opacity:1}.vtStick .vtSd[disabled]{opacity:.35}.vtStick .vtOff{opacity:1}#vtApp input[type=color]{width:46px;height:34px;padding:2px;border-radius:8px}#vtApp input[type=range]{padding:0;border:0;background:none}.vtCfgRow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #15171c}.vtPre{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.vtPre button{display:flex;align-items:center;gap:6px;background:#0d0f13;border:1px solid var(--ln);border-radius:10px;padding:8px 10px}.vtPre button.vtSel{border-color:var(--ac);color:var(--ac)}.vtPre i{width:12px;height:12px;border-radius:3px;display:inline-block}#vtCfgB{background:#0d0f13;border:1px solid var(--ln);border-radius:8px;padding:7px 11px;color:var(--mu)}";
   document.head.appendChild(s)}
 function vtIcon(i){var col={metals:"#F5B84B",forex:"#4C8DF6",indices:"#9B7BFF",crypto:"#F7931A"}[i.c];return'<span class="vtIc" style="background:'+col+'">'+esc(i.id.slice(0,3))+'</span>'}
 function vtChg(id){var b=VBK[id];if(!b||b.closed||b.ph)return"—";var p=b.pct||0;return(p>0?"+":"")+p.toFixed(2)+"%"}
@@ -1410,20 +1417,17 @@ function vtOrdSheet(){
   $("vtGo").onclick=function(){sync();if(vtPlace())d.remove()};
   vtPaint()}
 function vtTradeHtml(a){
-  var i=VIX[VT.sym],fav=vtFav().indexOf(i.id)>-1,on=a.status==="active",lim=VT.ot==="limit",sd=VT.side;
-  var left='<div class="vtSym">'+vtIcon(i)+'<div style="flex:1;min-width:0"><b style="font-size:17px">'+i.id+'</b><div style="color:var(--mu);font-size:12px">'+esc(i.n)+'</div></div><button type="button" id="vtStar" style="background:none;border:0;font-size:24px;color:'+(fav?"var(--ac)":"var(--mu)")+'">'+(fav?"\u2605":"\u2606")+'</button><button type="button" id="vtPick" class="vtTag">'+L("Ganti","Change")+'</button><button type="button" id="vtOrdB" class="vtTag">Order</button></div>'
-  +'<div style="margin:6px 0"><span class="vtBig" data-p="'+i.id+'">\u2014</span> <span data-c="'+i.id+'"></span> <span class="vtTag" data-m="'+i.id+'"></span></div>'
-  +'<div class="vtCh">'+VTF.map(function(f,k){return'<button type="button" data-tf="'+k+'" class="'+(VT.tf===k?"on":"")+'">'+f[1]+'</button>'}).join("")+'<button type="button" id="vtCfgB" aria-label="Chart settings" style="margin-left:auto">&#9881;</button></div><div class="vtChw"><div id="vtCh"></div></div><div class="vtStops" id="vtStops"></div><div class="vtHint" id="vtHint"></div><div id="vtNote" style="color:var(--mu);font-size:12px"></div>';
-  var right='<div class="vtTabs"><button type="button" data-ot="market" class="'+(!lim?"on":"")+'">Market</button><button type="button" data-ot="limit" class="'+(lim?"on":"")+'">Limit</button></div>'
-  +'<span class="vtLb">'+L("Volume (Lot)","Volume (Lot)")+'</span><div class="vtLot"><button type="button" data-lot="-">\u2212</button><input id="vtLot" inputmode="decimal" value="'+VT.lot+'"><button type="button" data-lot="+">+</button></div><div style="color:var(--mu);font-size:12px;margin-top:4px">1 Lot = '+i.cs.toLocaleString("en-US")+' '+i.u+' \u00b7 1:'+i.lev+'</div>'
-  +'<div class="vtCh">'+[0.01,0.05,0.1,0.5,1].map(function(v){return'<button type="button" data-lq="'+v+'">'+v+'</button>'}).join("")+'</div>'
-  +(lim?'<span class="vtLb">'+L("Harga limit","Limit price")+'</span><input id="vtPx" inputmode="decimal">':"")
-  +'<span class="vtLb">Take Profit (TP)</span><input id="vtTp" inputmode="decimal" placeholder="\u2014"><span class="vtLb">Stop Loss (SL)</span><input id="vtSl" inputmode="decimal" placeholder="\u2014">'
-  +'<button type="button" class="vtBtn" id="vtGo" style="margin-top:14px"'+(on?"":" disabled")+'>Place Order</button><div class="vtRow"><span>Margin Required</span><b data-k="mreq">\u2014</b></div><div class="vtRow"><span>'+L("Biaya spread","Spread cost")+'</span><b data-k="sprd">\u2014</b></div>';
-  var bar='<div class="vtStick'+(VT.inst?" inst":"")+'" id="vtBar"><button type="button" class="vtSd vtBuy'+(sd==="buy"?"":" vtOff")+'" data-bs="buy">BUY<small data-ask="'+i.id+'">\u2014</small></button>'
-  +'<div class="vtLotB"><div><button type="button" data-bl="-">\u2212</button><input id="vtLotB" inputmode="decimal" value="'+VT.lot+'"><button type="button" data-bl="+">+</button></div><button type="button" class="vtInstB'+(VT.inst?" on":"")+'" id="vtInst"><span class="vtSw'+(VT.inst?" on":"")+'"></span>'+L("Instan","Instant")+'</button></div>'
-  +'<button type="button" class="vtSd vtSell'+(sd==="sell"?"":" vtOff")+'" data-bs="sell">SELL<small data-bid="'+i.id+'">\u2014</small></button></div>';
-  return'<div class="vtGrid"><div class="vtL">'+left+'</div></div><div style="display:none" id="vtHold"><input id="vtLot" value="'+VT.lot+'"><input id="vtPx"><input id="vtTp"><input id="vtSl"></div>'+bar}
+  var i=VIX[VT.sym],fav=vtFav().indexOf(i.id)>-1,on=a.status==="active";
+  var top='<div class="vtTop"><button type="button" id="vtPick" class="vtSymB"><b>'+i.id+'</b> &#9662;</button><span class="vtPxB" data-p="'+i.id+'">\u2014</span><span class="vtChgB" data-c="'+i.id+'"></span><span class="vtTag" data-m="'+i.id+'"></span><span style="flex:1"></span>'
+   +'<button type="button" id="vtStar" class="vtIcB" style="color:'+(fav?"var(--ac)":"var(--mu)")+'">'+(fav?"\u2605":"\u2606")+'</button>'
+   +'<button type="button" class="vtInstB'+(VT.inst?" on":"")+'" id="vtInst"><span class="vtSw'+(VT.inst?" on":"")+'"></span>'+L("Instan","Instant")+'</button>'
+   +'<button type="button" id="vtOrdB" class="vtTag">Order</button><button type="button" id="vtCfgB" class="vtIcB" aria-label="Chart settings">&#9881;</button></div>';
+  var tf='<div class="vtTfR">'+VTF.map(function(f,k){return'<button type="button" data-tf="'+k+'" class="'+(VT.tf===k?"on":"")+'">'+f[1]+'</button>'}).join("")+'<span class="vtNm">'+esc(i.n)+'</span></div>';
+  var chart='<div class="vtChw"><div id="vtCh"></div><div class="vtStops" id="vtStops"></div><div id="vtNote"></div></div>';
+  var bar='<div class="vtStick'+(VT.inst?" inst":"")+'" id="vtBar"><button type="button" class="vtSd vtSell" data-bs="sell"'+(on?"":" disabled")+'>SELL<small data-bid="'+i.id+'">\u2014</small></button>'
+   +'<div class="vtLotB"><div><button type="button" data-bl="-">\u2212</button><input id="vtLotB" inputmode="decimal" value="'+VT.lot+'"><button type="button" data-bl="+">+</button></div></div>'
+   +'<button type="button" class="vtSd vtBuy" data-bs="buy"'+(on?"":" disabled")+'>BUY<small data-ask="'+i.id+'">\u2014</small></button></div>';
+  return'<div class="vtGrid"><div class="vtL">'+top+tf+chart+'</div></div><div style="display:none" id="vtHold"><input id="vtLot" value="'+VT.lot+'"><input id="vtPx"><input id="vtTp"><input id="vtSl"></div>'+bar}
 function vtPosHtml(a){
   var tabs='<div class="vtTabs">'+[["open","Open Positions"],["pend","Pending Orders"],["hist","History"]].map(function(k){return'<button type="button" data-pt="'+k[0]+'" class="'+(VT.pt===k[0]?"on":"")+'">'+k[1]+'</button>'}).join("")+'</div>';
   if(VT.pt==="open"){var ps=Object.keys(a.positions);
@@ -1522,7 +1526,7 @@ function vtBind(a){
   $("vtPick").onclick=vtPickHtml;
   A.querySelectorAll("[data-tf]").forEach(function(b){b.onclick=function(){VT.tf=+b.dataset.tf;vtRender()}});
   A.querySelectorAll("[data-bs]").forEach(function(b){b.onclick=function(){var s=b.dataset.bs;if(VT.inst){vtQuick(s);return}
-    VT.side=s;A.querySelectorAll("#vtBar [data-bs]").forEach(function(x){x.classList.toggle("vtOff",x.dataset.bs!==s)});vtOrdSheet()}});
+    VT.side=s;vtOrdSheet()}});
   A.querySelectorAll("[data-ot]").forEach(function(b){b.onclick=function(){VT.ot=b.dataset.ot;vtRender()}});
   A.querySelectorAll("[data-lq]").forEach(function(b){b.onclick=function(){vtSetLot(+b.dataset.lq)}});
   A.querySelectorAll("[data-lot]").forEach(function(b){b.onclick=function(){vtSetLot(vtStepLot(b.dataset.lot==="+"?1:-1))}});
@@ -1572,8 +1576,8 @@ function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function refCode(e){var h=5381;for(var i=0;i<e.length;i++)h=((h<<5)+h+e.charCodeAt(i))>>>0;return"VZ"+h.toString(36).toUpperCase().slice(0,6)}
 Object.assign(T.id,{"wdAcc":"Pilih akun","wdNoAcc":"Belum ada akun yang bisa withdraw. Akun harus Funded, dan akun Zero Instant harus memenuhi aturan konsistensi 15%. Akun challenge tidak bisa withdraw.","wdFirst":"Entry pertama","wdNext":"Payout berikutnya","wdNoEntry":"Belum ada trade di akun ini. Jadwal payout dihitung dua mingguan sejak entry pertama.","wdWait":"Payout belum terbuka. Jadwal berikutnya:","wdUsed":"Payout siklus ini sudah diajukan. Siklus berikutnya:","wdConsFail":"Aturan konsistensi belum terpenuhi: profit hari terbesar {p}% dari total profit (maks 15%).","wdCons":"Konsistensi","wdOpenNow":"Payout terbuka"});Object.assign(T.en,{"wdAcc":"Select account","wdNoAcc":"No account can withdraw yet. An account must be Funded, and Zero Instant accounts must meet the 15% consistency rule. Challenge accounts cannot withdraw.","wdFirst":"First entry","wdNext":"Next payout","wdNoEntry":"No trades on this account yet. The biweekly payout schedule counts from the first entry.","wdWait":"Payout is not open yet. Next date:","wdUsed":"This cycle's payout was already requested. Next cycle:","wdConsFail":"Consistency rule not met: your best day is {p}% of total profit (max 15%).","wdCons":"Consistency","wdOpenNow":"Payout open"});
 Object.assign(T.id,{"wdConsHint":"Profit hari terbesar dibanding total profit. Maksimal 15% agar bisa withdraw.","wdBankPick":"Pilih bank","wdBankOther":"Bank lain...","wdBankOtherLbl":"Nama bank lainnya"});Object.assign(T.en,{"wdConsHint":"Best day compared to total profit. Maximum 15% to be able to withdraw.","wdBankPick":"Select bank","wdBankOther":"Other bank...","wdBankOtherLbl":"Other bank name"});
-Object.assign(T.id,{"n_lb":"Leaderboard","lbT":"Leaderboard trader","lbYou":"Peringkat kamu","lbLoad":"Memuat...","lbErr":"Leaderboard belum bisa dimuat. Coba lagi nanti.","lbNone":"Belum ada data. Daftar muncul setelah ada akun aktif.","lbNo":"Kamu belum masuk daftar. Hanya akun aktif yang dihitung.","lbNote":"Diurutkan berdasarkan return akun aktif, diperbarui tiap beberapa menit. Nama disamarkan.","eqT":"Equity curve","eqNone":"Belum ada trade. Kurva muncul setelah ada hasil.","eqLow":"Terendah","eqHigh":"Tertinggi","eqNote":"Dihitung per hari dari profit yang sudah tertutup; titik terakhir adalah equity saat ini.","wdMin":"Minimal penarikan $50.","affDesc":"Bagikan kupon kamu. Pembeli dapat diskon {d}% dan kamu dapat komisi {c}% dari nilai pembayaran mereka.","affLoad":"Menyiapkan kupon kamu...","affErr":"Kupon belum bisa dimuat. Coba lagi nanti.","affCoupon":"Kode kupon kamu","affSales":"Pembelian","affNote2":"Komisi dihitung dari pembayaran setelah diskon. Pembelian oleh akun kamu sendiri tidak dihitung."});
-Object.assign(T.en,{"n_lb":"Leaderboard","lbT":"Trader leaderboard","lbYou":"Your rank","lbLoad":"Loading...","lbErr":"Could not load the leaderboard. Try again later.","lbNone":"No data yet. The list appears once there are active accounts.","lbNo":"You are not on the list. Only active accounts count.","lbNote":"Ranked by return of active accounts, updated every few minutes. Names are masked.","eqT":"Equity curve","eqNone":"No trades yet. The curve appears after the first results.","eqLow":"Low","eqHigh":"High","eqNote":"Calculated per day from closed profit; the last point is the current equity.","wdMin":"Minimum withdrawal is $50.","affDesc":"Share your coupon. Buyers get {d}% off and you earn {c}% commission on what they pay.","affLoad":"Preparing your coupon...","affErr":"Could not load your coupon. Try again later.","affCoupon":"Your coupon code","affSales":"Purchases","affNote2":"Commission is calculated on the payment after discount. Purchases by your own account are not counted."});
+Object.assign(T.id,{"n_lb":"Leaderboard","lbT":"Leaderboard trader","lbYou":"Peringkat kamu","lbLoad":"Memuat...","lbErr":"Leaderboard belum bisa dimuat. Coba lagi nanti.","lbNone":"Belum ada data. Daftar muncul setelah ada akun aktif.","lbNo":"Kamu belum masuk daftar. Hanya akun aktif yang dihitung.","lbNote":"Diurutkan berdasarkan return akun aktif, diperbarui tiap beberapa menit. Nama disamarkan.","eqT":"Equity curve","eqNone":"Belum ada trade. Kurva muncul setelah ada hasil.","eqLow":"Terendah","eqHigh":"Tertinggi","eqNote":"Dihitung per hari dari profit yang sudah tertutup; titik terakhir adalah equity saat ini.","wdMin":"Minimal penarikan 50 USD.","affDesc":"Bagikan kupon kamu. Pembeli dapat diskon {d}% dan kamu dapat komisi {c}% dari nilai pembayaran mereka.","affLoad":"Menyiapkan kupon kamu...","affErr":"Kupon belum bisa dimuat. Coba lagi nanti.","affCoupon":"Kode kupon kamu","affSales":"Pembelian","affNote2":"Komisi dihitung dari pembayaran setelah diskon. Pembelian oleh akun kamu sendiri tidak dihitung."});
+Object.assign(T.en,{"n_lb":"Leaderboard","lbT":"Trader leaderboard","lbYou":"Your rank","lbLoad":"Loading...","lbErr":"Could not load the leaderboard. Try again later.","lbNone":"No data yet. The list appears once there are active accounts.","lbNo":"You are not on the list. Only active accounts count.","lbNote":"Ranked by return of active accounts, updated every few minutes. Names are masked.","eqT":"Equity curve","eqNone":"No trades yet. The curve appears after the first results.","eqLow":"Low","eqHigh":"High","eqNote":"Calculated per day from closed profit; the last point is the current equity.","wdMin":"Minimum withdrawal is 50 USD.","affDesc":"Share your coupon. Buyers get {d}% off and you earn {c}% commission on what they pay.","affLoad":"Preparing your coupon...","affErr":"Could not load your coupon. Try again later.","affCoupon":"Your coupon code","affSales":"Purchases","affNote2":"Commission is calculated on the payment after discount. Purchases by your own account are not counted."});
 Object.assign(T.id,{"wdClosedT":"Penarikan ditutup","wdClosed":"Kamu sudah mengajukan penarikan untuk periode ini. Penarikan berikutnya bisa diajukan mulai {d}."});Object.assign(T.en,{"wdClosedT":"Withdrawal closed","wdClosed":"You have already requested a withdrawal for this period. The next one can be requested from {d}."});
 var wdAcc=null,pWdBusy=false;
 function pWdOne(a){var lg=PE.ledger(a),w=0;
@@ -1627,7 +1631,7 @@ function viewWd(){
   h+='<div class="lg-card"><b>'+t("wdT")+'</b><label style="margin-top:12px">'+t("wdAcc")+'<select id="wdAcc">'+opts+'</select></label><div class="grid" style="margin-top:12px"><div><small>'+t("wdAv")+'</small><strong>'+money(Math.max(ca.equity-ca.size,0))+'</strong></div><div><small>'+t("wdSch")+'</small><strong>'+t("wdBi")+'</strong></div><div><small>'+t("wdFirst")+'</small><strong>'+(wdFirst(ca)||"-")+'</strong></div><div><small>'+t("wdNext")+'</small><strong>'+(st.cy?st.cy.next:"-")+'</strong></div>'+(cs?'<div><small>'+t("wdCons")+'</small><strong>'+(cs.pct==null?"-":cs.pct.toFixed(1)+"% / 15%")+'</strong></div>':'')+'</div>'+(st.ok?'<p style="margin-top:10px">'+t("wdOpenNow")+'</p>':'<div class="lg-msg" style="margin-top:10px">'+wdWhy(st)+'</div>')+'</div>';
   var fS0=h.length;
   h+='<div class="lg-card"><div class="lg-demo">'+(CFG?t("wdNote"):t("wdDemo"))+'</div><form id="wdForm" novalidate="novalidate"><fieldset'+(st.ok?'':' disabled="disabled"')+' style="border:0;margin:0;padding:0;min-width:0"><div class="lg-tabs wdm" role="group" id="wdMs">'+WDM.map(function(k){return'<button type="button" data-m="'+k[0]+'" aria-pressed="'+(wdM===k[0])+'"'+(k[0]==="rise"?' disabled="disabled"':'')+'>'+t(k[1])+(k[0]==="rise"?'<small>'+t("wdSoon")+'</small>':'')+'</button>'}).join("")+'</div>';
-  h+='<label>'+t("wdAmt")+' (min $'+WD_MIN+')<input id="wdAmt" type="number" inputmode="decimal" min="'+WD_MIN+'" step="0.01"/></label>';
+  h+='<label>'+t("wdAmt")+' (min '+WD_MIN+' USD)<input id="wdAmt" type="number" inputmode="decimal" min="'+WD_MIN+'" step="0.01"/></label>';
   if(wdM==="crypto"){
     h+='<div class="lg-tabs wdm" role="group" id="wdNs">'+WDN.map(function(k){return'<button type="button" data-n="'+k[0]+'" aria-pressed="'+(wdNet===k[0])+'">'+k[1]+'</button>'}).join("")+'</div>';
     h+='<label>'+t("wdAddr")+'<input id="wdAddr" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"/></label>';
@@ -1640,8 +1644,8 @@ function viewWd(){
   h+='<div class="lg-card hist"><b>'+t("wdHist")+'</b>';
   if(wdState==="loading")h+='<p>...</p>';
   else if(!wdList.length)h+='<p>'+t("wdNone")+'</p>';
-  else h+=wdList.map(function(r){var pd=r.status==="paid"&&r.txId;return'<div class="rl"><span>'+esc(r.d)+" | "+wdLabel(r)+'</span><span>$'+Number(r.amt).toFixed(2)+" | "+t(pd?"wdPaid":"wdPend")+'</span></div>'+(pd?payCert(r):"")}).join("");
-  return (ca.unlock?'<div class="lg-card"><div class="lg-demo">'+(lang==="id"?"Mode tes payout aktif sampai ":"Payout test mode active until ")+new Date(ca.unlock.until).toISOString().slice(0,16).replace("T"," ")+" UTC. "+(lang==="id"?"Batas tes $":"Test limit $")+ca.unlock.max+'</div></div>':"")+h+'</div>';
+  else h+=wdList.map(function(r){var pd=r.status==="paid"&&r.txId;return'<div class="rl"><span>'+esc(r.d)+" | "+wdLabel(r)+'</span><span>'+Number(r.amt).toFixed(2)+" USD | "+t(pd?"wdPaid":"wdPend")+'</span></div>'+(pd?payCert(r):"")}).join("");
+  return (ca.unlock?'<div class="lg-card"><div class="lg-demo">'+(lang==="id"?"Mode tes payout aktif sampai ":"Payout test mode active until ")+new Date(ca.unlock.until).toISOString().slice(0,16).replace("T"," ")+" UTC. "+(lang==="id"?"Batas tes ":"Test limit ")+ca.unlock.max+" USD"+'</div></div>':"")+h+'</div>';
 }
 function viewProfForm(){
   var p=(CFG&&prof)?prof:ls("vz_prof_"+user.email,{});
@@ -1787,7 +1791,7 @@ function viewCert(){
   if(!f.length)return'<div class="lg-card"><b>'+t("ceT")+'</b><p style="margin-top:8px">'+t("ceNone")+'</p></div>';
   return f.map(function(a){
     var d=a.fundedDate||new Date().toISOString().slice(0,10),cid=a.certId||("VZ-"+a.id);
-    var u="/p/certificate.html?n="+encodeURIComponent(user.name||user.email)+"&p="+encodeURIComponent(a.program)+"&s="+encodeURIComponent("$"+a.size.toLocaleString("en-US"))+"&d="+encodeURIComponent(d)+"&id="+encodeURIComponent(cid)+"&f="+encodeURIComponent(a.firstEntry||"");
+    var u="/p/certificate.html?n="+encodeURIComponent(user.name||user.email)+"&p="+encodeURIComponent(a.program)+"&s="+encodeURIComponent(a.size.toLocaleString("en-US")+" USD")+"&d="+encodeURIComponent(d)+"&id="+encodeURIComponent(cid)+"&f="+encodeURIComponent(a.firstEntry||"");
     return'<div class="lg-card"><div class="dtop"><div><b>'+a.program+" "+kfmt(a.size)+'</b><p>ID '+a.id+'</p></div><span class="tag">'+t("ceFunded")+'</span></div><a class="lg-btn" href="'+u+'" target="_blank" rel="noopener">'+t("ceView")+'</a></div>';
   }).join("");
 }
