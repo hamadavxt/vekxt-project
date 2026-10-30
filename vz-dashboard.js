@@ -251,13 +251,13 @@ function equity(acc, books) {
 
 function usedMargin(acc) {
   let m = 0;
-  for (const p of Object.values(acc.positions)) m += (p.qty * p.entry * cv(p.symbol, p.entry)) / p.lev;
+  for (const p of Object.values(acc.positions)) m += p.mg ? p.qty * p.mg : (p.qty * p.entry * cv(p.symbol, p.entry)) / p.lev;
   return m;
 }
 
 function maintMargin(acc, books, cfg) {
   let m = 0;
-  for (const p of Object.values(acc.positions)) m += p.qty * mid(books[p.symbol]) * cv(p.symbol, mid(books[p.symbol])) * cfg.mmr;
+  for (const p of Object.values(acc.positions)) m += p.mg ? p.qty * p.mg * (cfg.mmFut == null ? 0.5 : cfg.mmFut) : p.qty * mid(books[p.symbol]) * cv(p.symbol, mid(books[p.symbol])) * cfg.mmr;
   return m;
 }
 
@@ -273,14 +273,14 @@ function setLeverage(acc, symbol, lev, cfg = DEFAULT_CFG) {
 // Tiap penutupan dicatat sebagai trade; fee pembukaan dibagi sesuai porsi yang ditutup.
 let CLOSE_WHY = null; // alasan penutupan untuk trade berikutnya: sl | tp | liq | null (manual)
 function applyFill(acc, symbol, side, qty, price, maker, cfg, reduceOnly, now) {
-  const buy = side === "buy", rate = maker ? cfg.makerFee : cfg.takerFee;
+  const buy = side === "buy", rate = maker ? cfg.makerFee : cfg.takerFee, fu = cfg.feeU && cfg.feeU[symbol];
   const ev = [];
   let rest = qty, fee = 0;
   const pos = acc.positions[symbol];
   if (pos && (pos.side === "long") !== buy) {
     const cq = Math.min(rest, pos.qty), before = pos.qty;
     const gross = (pos.side === "long" ? price - pos.entry : pos.entry - price) * cq * cv(symbol, price);
-    const closeFee = price * cq * cv(symbol, price) * rate;
+    const closeFee = fu != null ? cq * fu : price * cq * cv(symbol, price) * rate;
     const share = (pos.feePaid || 0) * (cq / before);
     pos.feePaid = r8((pos.feePaid || 0) - share);
     acc.balance = r8(acc.balance + gross);
@@ -294,7 +294,7 @@ function applyFill(acc, symbol, side, qty, price, maker, cfg, reduceOnly, now) {
     ev.push({ type: "close", symbol, qty: r8(cq), price, pnl: r8(gross) });
   }
   if (rest > EPS && !reduceOnly) {
-    const openFee = price * rest * cv(symbol, price) * rate;
+    const openFee = fu != null ? rest * fu : price * rest * cv(symbol, price) * rate;
     fee += openFee;
     const cur = acc.positions[symbol];
     if (cur) {
@@ -302,7 +302,7 @@ function applyFill(acc, symbol, side, qty, price, maker, cfg, reduceOnly, now) {
       cur.qty = r8(cur.qty + rest);
       cur.feePaid = r8((cur.feePaid || 0) + openFee);
     } else {
-      acc.positions[symbol] = { symbol, side: buy ? "long" : "short", qty: r8(rest), entry: price, lev: acc.lev[symbol] || cfg.defaultLev, sl: null, tp: null, feePaid: r8(openFee), since: now };
+      acc.positions[symbol] = { symbol, side: buy ? "long" : "short", qty: r8(rest), entry: price, lev: acc.lev[symbol] || cfg.defaultLev, sl: null, tp: null, feePaid: r8(openFee), since: now, ...(cfg.mgU && cfg.mgU[symbol] ? { mg: cfg.mgU[symbol] } : {}) };
     }
     if (!acc.firstOpen) acc.firstOpen = utcDay(now);
     ev.push({ type: "open", symbol, side: buy ? "long" : "short", qty: r8(rest), price });
@@ -322,8 +322,16 @@ function marginCheck(acc, books, symbol, side, qty, price, maker, cfg, reduceOnl
   if (reduceOnly && !opposite) return "reduce_only_no_position";
   const closing = opposite ? Math.min(qty, pos.qty) : 0;
   const opening = reduceOnly ? 0 : qty - closing;
+  const mgU = cfg.mgU && cfg.mgU[symbol], fu = cfg.feeU && cfg.feeU[symbol];
+  if (cfg.wU && cfg.capU > 0 && opening > 0) {
+    let cur = 0;
+    for (const p of Object.values(acc.positions)) cur += p.qty * (cfg.wU[p.symbol] || 0);
+    const w = cfg.wU[symbol] || 0;
+    if (cur - closing * w + opening * w > cfg.capU + EPS) return "max_contracts";
+  }
   const lev = acc.lev[symbol] || cfg.defaultLev;
-  const need = (opening * price * cv(symbol, price)) / lev + price * qty * cv(symbol, price) * (maker ? cfg.makerFee : cfg.takerFee);
+  const fee = fu != null ? qty * fu : price * qty * cv(symbol, price) * (maker ? cfg.makerFee : cfg.takerFee);
+  const need = (mgU ? opening * mgU : (opening * price * cv(symbol, price)) / lev) + fee;
   const free = equity(acc, books) - usedMargin(acc);
   return need > free + EPS ? "insufficient_margin" : null;
 }
@@ -334,10 +342,11 @@ function placeOrder(acc, o, books, cfg = DEFAULT_CFG, now = Date.now()) {
   if (!validBook(b, cfg)) return { ok: false, error: "no_price" };
   if (!(o.qty > 0) || (o.side !== "buy" && o.side !== "sell")) return { ok: false, error: "bad_order" };
   const buy = o.side === "buy";
-  const limitOk = o.type === "limit" && o.price > 0;
-  if (o.type !== "market" && !limitOk) return { ok: false, error: "bad_order" };
+  const limitOk = o.type === "limit" && o.price > 0, stopOk = o.type === "stop" && o.price > 0;
+  if (o.type !== "market" && !limitOk && !stopOk) return { ok: false, error: "bad_order" };
+  if (stopOk && (buy ? o.price <= b.ask : o.price >= b.bid)) return { ok: false, error: "bad_stop" };
 
-  const crossing = o.type === "market" || (buy ? o.price >= b.ask : o.price <= b.bid);
+  const crossing = o.type === "market" || (!stopOk && (buy ? o.price >= b.ask : o.price <= b.bid));
   if (crossing) {
     const px = buy ? b.ask * (1 + cfg.slippage) : b.bid * (1 - cfg.slippage);
     const err = marginCheck(acc, books, o.symbol, o.side, o.qty, px, false, cfg, !!o.reduceOnly);
@@ -350,7 +359,7 @@ function placeOrder(acc, o, books, cfg = DEFAULT_CFG, now = Date.now()) {
     return { ok: true, filled: true, price: px, events };
   }
   const id = acc.nextOrderId++;
-  acc.orders.push({ id, symbol: o.symbol, side: o.side, qty: o.qty, price: o.price, reduceOnly: !!o.reduceOnly, sl: o.sl || null, tp: o.tp || null });
+  acc.orders.push({ id, symbol: o.symbol, side: o.side, qty: o.qty, price: o.price, reduceOnly: !!o.reduceOnly, sl: o.sl || null, tp: o.tp || null, ...(stopOk ? { kind: "stop" } : {}) });
   return { ok: true, filled: false, orderId: id, events: [] };
 }
 
@@ -402,12 +411,14 @@ function onTick(acc, books, cfg = DEFAULT_CFG, now = Date.now()) {
   for (const o of [...acc.orders]) {
     const b = books[o.symbol];
     if (!validBook(b, cfg)) continue;
-    const hit = o.side === "buy" ? b.ask <= o.price : b.bid >= o.price;
+    const stop = o.kind === "stop";
+    const hit = stop ? (o.side === "buy" ? b.ask >= o.price : b.bid <= o.price) : (o.side === "buy" ? b.ask <= o.price : b.bid >= o.price);
     if (!hit) continue;
     acc.orders = acc.orders.filter((x) => x.id !== o.id);
-    const err = marginCheck(acc, books, o.symbol, o.side, o.qty, o.price, true, cfg, o.reduceOnly);
+    const fpx = stop ? (o.side === "buy" ? b.ask : b.bid) : o.price;
+    const err = marginCheck(acc, books, o.symbol, o.side, o.qty, fpx, !stop, cfg, o.reduceOnly);
     if (err) { events.push({ type: "order_cancelled", id: o.id, reason: err }); continue; }
-    events.push(...applyFill(acc, o.symbol, o.side, o.qty, o.price, true, cfg, o.reduceOnly, now));
+    events.push(...applyFill(acc, o.symbol, o.side, o.qty, fpx, !stop, cfg, o.reduceOnly, now));
     if (acc.positions[o.symbol]) { if (o.sl) acc.positions[o.symbol].sl = o.sl; if (o.tp) acc.positions[o.symbol].tp = o.tp; }
   }
 
@@ -434,8 +445,8 @@ function onTick(acc, books, cfg = DEFAULT_CFG, now = Date.now()) {
   const eq = equity(acc, books);
   if (eq > acc.peak) acc.peak = eq;
   const r = acc.rules;
-  if (acc.day.startBal - eq >= (acc.size * r.dailyDd) / 100) return events.concat(breach(acc, books, cfg, "daily", now));
-  const ref = r.trailing ? acc.peak : acc.size;
+  if (r.dailyDd > 0 && acc.day.startBal - eq >= (acc.size * r.dailyDd) / 100) return events.concat(breach(acc, books, cfg, "daily", now));
+  const ref = r.trailing ? (r.lock ? Math.min(acc.peak, acc.size * (1 + r.maxDd / 100)) : acc.peak) : acc.size;
   if (ref - eq >= (acc.size * r.maxDd) / 100) return events.concat(breach(acc, books, cfg, "max", now));
   return events;
 }
@@ -460,7 +471,8 @@ function snapshot(acc, books) {
     unrealized: r8(eq - acc.balance), usedMargin: r8(usedMargin(acc)), freeMargin: r8(eq - usedMargin(acc)),
     realized: acc.realized, fees: acc.fees, funding: acc.funding,
     dailyLoss: Math.max(0, r8(acc.day.startBal - eq)), dailyLimit: (acc.size * acc.rules.dailyDd) / 100,
-    maxLoss: Math.max(0, r8((acc.rules.trailing ? acc.peak : acc.size) - eq)), maxLimit: (acc.size * acc.rules.maxDd) / 100,
+    maxLoss: Math.max(0, r8((acc.rules.trailing ? (acc.rules.lock ? Math.min(acc.peak, acc.size * (1 + acc.rules.maxDd / 100)) : acc.peak) : acc.size) - eq)), maxLimit: (acc.size * acc.rules.maxDd) / 100,
+    floor: r8((acc.rules.trailing ? (acc.rules.lock ? Math.min(acc.peak, acc.size * (1 + acc.rules.maxDd / 100)) : acc.peak) : acc.size) - (acc.size * acc.rules.maxDd) / 100),
     positions: Object.values(acc.positions).map((p) => ({ ...p, upnl: r8(upnl(p, books[p.symbol])) })),
     orders: acc.orders,
   };
@@ -488,7 +500,7 @@ function ledger(acc) {
 return{QC,DEFAULT_CFG,validBook,newAccount,equity,usedMargin,setLeverage,placeOrder,cancelOrder,setStops,onTick,applyFunding,snapshot,ledger};
 })();
 /* ===== PERPS: dual login (CFD / Perps) + terminal. Harga: Bybit publik. Mesin: perp-engine.mjs (inline di atas) ===== */
-var PM=document.documentElement.getAttribute("data-mode")==="perp"?"perp":"cfd";
+var PM=(function(){var m=document.documentElement.getAttribute("data-mode");return m==="perp"||m==="fut"?m:"cfd"})();
 var PSYMS=["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","XAUUSDT"],PDEC={BTCUSDT:1,ETHUSDT:2,SOLUSDT:3,XRPUSDT:4,DOGEUSDT:5,XAUUSDT:2},QSTEP={BTCUSDT:.001,ETHUSDT:.01,SOLUSDT:.1,XRPUSDT:1,DOGEUSDT:1,XAUUSDT:.01},PTICK={},PMINQ={},INFO={BTCUSDT:1,ETHUSDT:1,SOLUSDT:1,XRPUSDT:1,DOGEUSDT:1,XAUUSDT:1},INFO_OK=false,ALLT={},pAllAt=0,pInfoBusy=false,pSubs={};
 /* --- daftar koin: semua perpetual USDT Bybit (otomatis) + kategori Major / Meme / Micin / Emas --- */
 var PMEME=/^(DOGE|SHIB|PEPE|WIF|BONK|FLOKI|MEME|TURBO|BRETT|POPCAT|MOG|NEIRO|PNUT|GOAT|ACT|MOODENG|FARTCOIN|TRUMP|MEW|BOME|DOGS|CAT|BABYDOGE|SATS|RATS|LADYS|WOJAK|MYRO|SLERF|BODEN|MICHI|GIGA|SPX|CHILLGUY|PENGU|AI16Z|VINE|HIPPO|BANANA|TOSHI|DEGEN|MOCHI|APU|PONKE|HMSTR|CATI|MUBARAK|BROCCOLI|BANANAS31|PUMP|USELESS|FWOG|PEOPLE|MELANIA|LIBRA|PIPPIN|ZEREBRO|GRIFFAIN|SWARMS|TST|BULLY|MEMEFI|MAGA|SUNDOG|KEYCAT|MANEKI|SIGMA|SNEK|BOBO|WEN|ELON|CHEEMS)$/;
@@ -551,10 +563,10 @@ function notPerp(a){return !isPerp(a)}
 function pmu(v){return(v>0?"+":v<0?"-":"")+f2(Math.abs(v))+" USDT"}
 function pc(v){return v>0?"pup":v<0?"pdn":""}
 /* --- dual login: satu akun, dua produk --- */
-function modeLinks(){return'<a href="#" data-pm="cfd" aria-pressed="'+(PM==="cfd")+'">CFD</a><a href="#" data-pm="perp" aria-pressed="'+(PM==="perp")+'">Perps</a>'}
+function modeLinks(){return'<a href="#" data-pm="cfd" aria-pressed="'+(PM==="cfd")+'">CFD</a><a href="#" data-pm="perp" aria-pressed="'+(PM==="perp")+'">Perps</a><a href="#" data-pm="fut" aria-pressed="'+(PM==="fut")+'">Futures</a>'}
 function modeSw(){return'<div class="modesw" role="group" aria-label="Produk">'+modeLinks()+'</div>'}
 function paintMode(){var e=$("lgMode");if(!e)return;e.style.display=user?"none":"";e.innerHTML=modeLinks()}
-function setMode(m){if(m===PM)return;PM=m;try{localStorage.setItem("vzMode",m)}catch(e){}var h=document.documentElement;if(m==="perp")h.setAttribute("data-mode","perp");else h.removeAttribute("data-mode");selAcc=null;selP=null;paintMode();if(user)dash()}
+function setMode(m){if(m===PM)return;PM=m;try{localStorage.setItem("vzMode",m)}catch(e){}var h=document.documentElement;if(m==="perp"||m==="fut")h.setAttribute("data-mode",m);else h.removeAttribute("data-mode");selAcc=null;selP=null;selV=null;paintMode();if(user)dash()}
 document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("[data-pm]");if(!a)return;e.preventDefault();setMode(a.getAttribute("data-pm"))});
 /* --- penyimpanan akun uji (browser ini) --- */
 function pKey(){return"vzPerp:"+((user&&(user.uid||user.email))||"x")}
@@ -1061,18 +1073,21 @@ var VI=[
 {id:"NAS100",n:"NASDAQ 100 Index",c:"indices",cs:1,lev:20,d:2,u:"index",a:["NAS100","USTEC","US100","NAS100Cash"]},
 {id:"US30",n:"Dow Jones 30 Index",c:"indices",cs:1,lev:20,d:2,u:"index",a:["US30","DJ30","WS30","US30Cash"]},
 {id:"BTCUSD",n:"Bitcoin / US Dollar",c:"crypto",cs:1,lev:20,d:2,u:"BTC",a:["BTCUSD"]},
-{id:"ETHUSD",n:"Ethereum / US Dollar",c:"crypto",cs:1,lev:20,d:2,u:"ETH",a:["ETHUSD"]}];
+{id:"ETHUSD",n:"Ethereum / US Dollar",c:"crypto",cs:1,lev:20,d:2,u:"ETH",a:["ETHUSD"]},
+{id:"USOIL",n:"WTI Crude Oil",c:"energy",cs:1000,lev:20,d:2,u:"bbl",a:["USOIL","WTI","XTIUSD","USOILCash","CL-OIL"],fo:1}];
 var VIX={};VI.forEach(function(i){VIX[i.id]=i;if(i.q)PE.QC[i.id]=function(p){return 1/p}});
 var VCAT=[["fav","Favorites"],["forex","Forex"],["metals","Metals"],["indices","Indices"],["crypto","Crypto"]];
-var PRG={hyper:{n:"Hyper 1 Step",t:[10],dd:4,md:8,min:5,tr:false},nova:{n:"Nova 2 Step",t:[8,5],dd:5,md:10,min:5,tr:false},zero:{n:"Zero Instant",t:null,dd:3,md:7,min:0,tr:true}};
+var PRG={hyper:{n:"Hyper 1 Step",t:[10],dd:4,md:8,min:5,tr:false},nova:{n:"Nova 2 Step",t:[8,5],dd:5,md:10,min:5,tr:false},zero:{n:"Zero Instant",t:null,dd:3,md:7,min:0,tr:true},fut:{n:"Vekxt Futures",t:[6],dd:0,md:4,min:0,tr:true,lock:true}};
 var VCFG={takerFee:0,makerFee:0,defaultLev:100,maxLev:500,levMax:{},mmr:0.005,slippage:0,maxSpread:0.05};
 var VTF=[["1m","M1",60],["5m","M5",300],["15m","M15",900],["30m","M30",1800],["1h","H1",3600],["4h","H4",14400],["1d","D1",86400]];
 var VERR={insufficient_margin:["Margin tidak cukup.","Insufficient margin."],no_price:["Harga belum tersedia.","No price yet."],bad_order:["Order tidak valid.","Invalid order."],account_breached:["Akun sudah breached.","Account is breached."],account_passed:["Challenge sudah lolos. Trading di akun berikutnya.","Challenge already passed. Trade on the next account."]};
 var VBK={},vtMap={},vtWs=null,vtConn=false,vtPollT=0,vtRefT=0,vtStarted=false,vtEntSt="idle",vtBars=[],vtBarKey="",vtCh=null,vtCs=null,vtLines=[],vtOhlcU=null,vtLwBusy=false,vtToastT=0,vtSig="";
 var selV=null,VT={on:false,tab:"home",sym:"XAUUSD",cat:"fav",tf:4,side:"buy",ot:"market",pt:"open",acc:null,lot:0.1,sheet:null,inst:false},vtDrag=null,vtTap=null,vtLsig="",vtQAt=0;
 try{VT.inst=localStorage.getItem("vtInst")==="1"}catch(e){}
-function vtList(){return PERPS.filter(function(a){return a.vt})}
-function vtById(id){var l=vtList();for(var i=0;i<l.length;i++)if(l[i].id===id)return l[i];return null}
+function vtList(){return PERPS.filter(function(a){return a.vt&&!a.fut})}
+function vtAll(){return PERPS.filter(function(a){return a.vt})}
+function futList(){return PERPS.filter(function(a){return a.vt&&a.fut})}
+function vtById(id){var l=vtAll();for(var i=0;i<l.length;i++)if(l[i].id===id)return l[i];return null}
 /* halaman statistik akun (sama seperti detail akun CFD/Perps), dengan tombol Trade sekarang menuju terminal */
 function vtAsCfd(a){var s=vtSnap(a),lg=PE.ledger(a);
   return{id:esc(a.id),program:esc(a.program),phase:a.phase||null,phases:a.phases||null,size:a.size,equity:s.equity,target:a.target||null,dd:a.rules.dailyDd,md:a.rules.maxDd,ddUsed:s.dailyLoss,mdUsed:s.maxLoss,days:lg.days,minDays:a.minDays||0,pnl:lg.pnl,stats:lg.stats,
@@ -1081,7 +1096,7 @@ function vtDetail(a){
   var h=accDetail(vtAsCfd(a)),on=a.status==="active";
   var btn='<button type="button" class="lg-btn" id="vtGoTrade" style="margin-bottom:12px"'+(on?"":" disabled")+'>'+L("Trade sekarang","Trade now")+'</button>'+(a.status==="passed"?'<div class="lg-card"><p>'+L("Challenge lolos. Akun berikutnya: ","Challenge passed. Next account: ")+esc(a.passedTo||"")+'</p></div>':"");
   return h.replace('</button><div class="lg-card">','</button>'+btn+'<div class="lg-card">')}
-function vtAcc(){var l=vtList();for(var i=0;i<l.length;i++)if(l[i].id===VT.acc)return l[i];return null}
+function vtAcc(){var l=vtAll();for(var i=0;i<l.length;i++)if(l[i].id===VT.acc)return l[i];return null}
 function vtFav(){try{var f=JSON.parse(localStorage.getItem("vtFav")||"null");if(Array.isArray(f))return f}catch(e){}return["XAUUSD","EURUSD","GBPUSD","US500","NAS100","BTCUSD"]}
 function vtFavSet(f){try{localStorage.setItem("vtFav",JSON.stringify(f))}catch(e){}}
 function vtLive(id){var b=VBK[id];return !!b&&!b.closed&&!b.ph&&Date.now()-b.rx<90000}
@@ -1090,11 +1105,11 @@ function vtM(n){n=+n||0;return(n<0?"-":"")+Math.abs(n).toLocaleString("en-US",{m
 function vtEnsure(a){Object.keys(a.positions).forEach(function(s){if(!VBK[s]){var p=a.positions[s];VBK[s]={bid:p.entry,ask:p.entry,mid:p.entry,pct:0,ts:0,rx:0,closed:true,ph:1}}})}
 function vtSnap(a){vtEnsure(a);return PE.snapshot(a,VBK)}
 function vtNewAcc(base,id,pk,size,phase,funded){
-  var g=PRG[pk],a=PE.newAccount({id:id,size:size,rules:{dailyDd:g.dd,maxDd:g.md,trailing:g.tr}});
-  a.vt=1;a.base=base;a.pk=pk;a.program=g.n;a.phase=g.t?phase:null;a.phases=g.t?g.t.length:null;
+  var g=PRG[pk],a=PE.newAccount({id:id,size:size,rules:{dailyDd:g.dd,maxDd:g.md,trailing:g.tr,lock:!!g.lock}});
+  a.vt=1;if(pk==="fut"){a.fut=1}a.base=base;a.pk=pk;a.program=g.n;a.phase=g.t?phase:null;a.phases=g.t?g.t.length:null;
   a.isFunded=!!funded;a.funded=!!funded;a.target=funded||!g.t?0:g.t[phase-1];a.minDays=funded?0:g.min;
   if(funded){a.fundedDate=new Date().toISOString().slice(0,10);a.certId="VZ-"+id}
-  VI.forEach(function(i){a.lev[i.id]=i.lev});return a}
+  VI.forEach(function(i){a.lev[i.id]=i.lev});if(a.fut)FI.forEach(function(i){a.lev[i.id]=1});return a}
 function vtAdd(a){if(!PERPS.some(function(x){return x.id===a.id}))PERPS.push(a)}
 /* challenge lolos: Nova fase 1 -> fase 2, lainnya -> akun funded. ID turunan supaya tidak dobel lintas perangkat */
 function vtNext(a){
@@ -1112,7 +1127,7 @@ function vtPass(a){
 function vtBoot(){
   if(!user||vtEntSt==="loading")return;pLoadAll();
   if(pFsState==="idle"&&!vtBoot.b){vtBoot.b=true;pRemoteLoad(function(){vtBoot.b=false;vtHeal();pSave();vtEntSt="idle";vtBoot();if(view==="home"&&PM!=="perp")dash()});return}
-  if(pFsState!=="ok")return;if(vtList().length)vtStart();if(vtEntSt==="done")return;
+  if(pFsState!=="ok")return;if(vtAll().length)vtStart();if(vtEntSt==="done")return;
   vtEntSt="loading";
   apiPost({action:"vt"},function(d){
     var un=(Array.isArray(d.entitlements)?d.entitlements:[]).filter(function(e){return e.status==="unused"});
@@ -1128,8 +1143,8 @@ function vtTickIn(t){
   if(!t||!t.symbol)return;var id=vtMap[String(t.symbol).toUpperCase()];if(!id)return;
   var bid=+t.bid,ask=+t.ask,m=+t.mid;if(!(bid>0&&ask>=bid)){if(!(m>0))return;bid=ask=m}
   var ts=vtTs(t.timestamp);if(!(ts>0))ts=Date.now();var o=VBK[id];
-  VBK[id]={bid:bid,ask:ask,mid:(bid+ask)/2,pct:t.dayDiffPercent!=null?+t.dayDiffPercent:(o?o.pct:0),ts:ts,rx:Date.now(),closed:t.marketState==="closed"}
-  vtCandle(id,(bid+ask)/2,ts)}
+  VBK[id]={bid:bid,ask:ask,mid:(bid+ask)/2,pct:t.dayDiffPercent!=null?+t.dayDiffPercent:(o?o.pct:0),hi:+t.high>0?+t.high:(o?o.hi:0),lo:+t.low>0?+t.low:(o?o.lo:0),ts:ts,rx:Date.now(),closed:t.marketState==="closed"}
+  vtCandle(id,(bid+ask)/2,ts);if(FB[id])fuDerive(id,ts)}
 function vtLatest(cb){
   var q=[];VI.forEach(function(i){i.a.forEach(function(s){q.push("symbols="+encodeURIComponent(s))})});
   fetch(BQ+"/api/latest?"+q.join("&")).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){
@@ -1154,13 +1169,13 @@ function vtStart(){
 /* ---- mesin: dijalankan tiap 0,5 dtk untuk semua akun aktif ---- */
 function vtStep(){
   var ch=false,open=false;
-  vtList().forEach(function(a){
+  vtAll().forEach(function(a){
     if(a.status!=="active")return;open=true;vtEnsure(a);
     var ok=Object.keys(a.positions).every(function(s){return vtLive(s)});
-    if(ok){var ev=PE.onTick(a,VBK,VCFG,Date.now());if(ev.length){ch=true;vtEv(a,ev)}}
+    if(ok){var ev=PE.onTick(a,VBK,fuCfg(a),Date.now());if(ev.length){ch=true;vtEv(a,ev)}}
     if(vtPass(a)){ch=true;vtToast(L("Selamat! Challenge lolos. Akun berikutnya dibuat otomatis: ","Congrats! Challenge passed. Next account created: ")+a.passedTo,true)}});
   if(ch){pSave();pPush(true);if(VT.on)vtRender();else if(view==="home"&&PM!=="perp"&&!VT.on)dash()}
-  if(VT.on&&!ch)vtPaint()}
+  if(VT.on&&!ch){var fa=vtAcc();if(fa&&fa.fut&&VT.tab==="trade")fuTick(fa);else vtPaint()}}
 function vtEv(a,ev){ev.forEach(function(e){
   if(e.type==="breach")vtToast((a.reason==="daily"?L("Batas drawdown harian tercapai. Akun breached.","Daily drawdown reached. Account breached."):a.reason==="liquidation"?L("Stop out. Akun breached.","Stop out. Account breached."):L("Batas drawdown total tercapai. Akun breached.","Max drawdown reached. Account breached.")),false);
   else if(e.type==="stop_loss")vtToast("Stop Loss "+e.symbol,false);else if(e.type==="take_profit")vtToast("Take Profit "+e.symbol,true)})}
@@ -1196,11 +1211,11 @@ function vtBybit(key,id,tf,cb){
 function vtLoadBars(){
   var i=VIX[VT.sym],tf=VTF[VT.tf],key=VT.sym+"|"+VT.tf;vtBarKey=key;vtBars=[];if(vtCs)vtCs.setData([]);
   var cc=vtCache[key];if(cc&&cc.bars.length&&Date.now()-cc.at<20000){vtBars=cc.bars;if(vtCs){vtCs.setData(vtBars);if(!vtRestoreView())vtCh.timeScale().fitContent()}return}
-  var bq=i&&(i.bq||i.a[0]),fm=[tf[0],tf[1],String(tf[2]/60)],diag=[],dead={};
+  var bi=(i&&i.fut&&VIX[i.base])||i,bq=bi&&(bi.bq||bi.a[0]),fm=[tf[0],tf[1],String(tf[2]/60)],diag=[],dead={};
   var note=function(x){if(diag.indexOf(x)<0)diag.push(x)};
   var run=function(list){
     var k=0;(function nx(){
-      if(k>=list.length){vtBybit(key,VT.sym,VT.tf,function(ok){
+      if(k>=list.length){vtBybit(key,(i&&i.base)||VT.sym,VT.tf,function(ok){
         if(ok){vtPaintNote(L("Riwayat candle dari Bybit (perkiraan).","Candle history from Bybit (approximate)."));return}
         vtOhlcFail=Date.now();vtPaintNote(L("Riwayat candle belum bisa dimuat","Candle history unavailable")+": "+diag.slice(0,8).join(" · ")+" — "+L("candle terbentuk dari harga live.","candles build from live prices."))});return}
       var c=list[k++],path=c.t.split("?")[0];if(dead[path])return nx();
@@ -1231,7 +1246,7 @@ function vtMkChart(){
     if(vtCh){try{vtCh.remove()}catch(e){}vtCh=null}
     var C=window.LightweightCharts,e2=$("vtCh");
     vtCh=C.createChart(e2,Object.assign({width:e2.clientWidth||320,height:e2.clientHeight||280,rightPriceScale:{borderColor:"#292B32"},timeScale:{timeVisible:true,secondsVisible:false,borderColor:"#292B32"}},vtChartOpts(vtCfg())));
-    vtCs=vtCh.addCandlestickSeries(Object.assign({priceFormat:{type:"price",precision:VIX[VT.sym].d,minMove:Math.pow(10,-VIX[VT.sym].d)}},vtSerOpts(vtCfg())));
+    vtCs=vtCh.addCandlestickSeries(Object.assign({priceFormat:{type:"price",precision:VIX[VT.sym].d,minMove:VIX[VT.sym].tick||Math.pow(10,-VIX[VT.sym].d)}},vtSerOpts(vtCfg())));
     vtLines=[];vtLsig="";vtLoadBars();vtBindDrag(e2);vtPosLines();vtStopsUI();
     if(window.ResizeObserver)new ResizeObserver(function(){var q=$("vtCh");if(q&&vtCh)vtCh.applyOptions({width:q.clientWidth,height:q.clientHeight})}).observe(e2)})}
 function vtPosLines(){vtLsig="";vtSyncLines()}
@@ -1240,12 +1255,12 @@ function vtEst(p,px){var qc=PE.QC[p.symbol]?PE.QC[p.symbol](px):1;return(p.side=
 function vtLvlTitle(k,price){var a=vtAcc(),p=a&&a.positions[VT.sym];if(!p)return k.toUpperCase();return k.toUpperCase()+" "+vtM2(vtEst(p,price))}
 function vtLvl(){
   var a=vtAcc(),id=VT.sym,it=[];if(!a)return it;var p=a.positions[id],i=VIX[id];
-  if(p){it.push({k:"entry",price:p.entry,color:"#F5B84B",st:0,title:"ENTRY "+(p.qty/i.cs).toFixed(2)+(p.sl||p.tp?"":" \u00b7 tap = SL/TP")});
+  if(p){it.push({k:"entry",price:p.entry,color:"#F5B84B",st:0,title:"ENTRY "+(i.fut?Math.round(p.qty/i.cs):(p.qty/i.cs).toFixed(2))+(p.sl||p.tp?"":" \u00b7 tap = SL/TP")});
     if(p.sl)it.push({k:"sl",price:p.sl,color:"#F04452",st:2,title:vtLvlTitle("sl",p.sl)});
     if(p.tp)it.push({k:"tp",price:p.tp,color:"#22C55E",st:2,title:vtLvlTitle("tp",p.tp)})}
   else{var sl=+($("vtSl")||{}).value||0,tp=+($("vtTp")||{}).value||0;
     if(sl>0)it.push({k:"sl",price:sl,color:"#F04452",st:2,title:"SL"});if(tp>0)it.push({k:"tp",price:tp,color:"#22C55E",st:2,title:"TP"})}
-  a.orders.forEach(function(o){if(o.symbol===id)it.push({k:"o"+o.id,price:o.price,color:"#4C8DFF",st:1,title:"LIMIT "+o.side.toUpperCase()})});
+  a.orders.forEach(function(o){if(o.symbol===id)it.push({k:"o"+o.id,price:o.price,color:"#4C8DFF",st:1,title:(o.kind==="stop"?"STOP ":"LIMIT ")+o.side.toUpperCase()})});
   return it}
 function vtSyncLines(){
   if(!vtCs||vtDrag)return;var it=vtLvl(),sig=JSON.stringify(it.map(function(x){return[x.k,x.price,x.color,x.st]})),sk=JSON.stringify(it.map(function(x){return[x.k,x.color,x.st]}));
@@ -1255,7 +1270,8 @@ function vtSyncLines(){
       vtLines=it.map(function(x){return{k:x.k,price:x.price,t:x.title,h:vtCs.createPriceLine({price:x.price,color:x.color,lineWidth:(x.k==="entry"||x.k==="sl"||x.k==="tp")?2:1,lineStyle:x.st,axisLabelVisible:true,title:x.title})}});
       vtLsig=sig;vtLsk=sk;vtStopsUI()}}
   else it.forEach(function(x,j){var l=vtLines[j];if(l&&l.t!==x.title){l.t=x.title;l.h.applyOptions({title:x.title})}})}
-function vtRound(id,v){return+(+v).toFixed(VIX[id].d)}
+function vtRound(id,v){var i=VIX[id];return i.tick?fuRound(i,v):+(+v).toFixed(i.d)}
+function vtLotStr(q,i){return i.fut?Math.round(q/i.cs)+" ct ":(q/i.cs).toFixed(2)+" lot "}
 function vtRef(p){var b=VBK[p.symbol];return b&&!b.ph?(p.side==="long"?b.bid:b.ask):p.entry}
 function vtLock(v){try{vtCh.applyOptions({handleScroll:v,handleScale:v})}catch(e){}}
 function vtNear(y,kinds,tol){var hit=null,bd=tol;vtLines.forEach(function(l){if(!kinds[l.k])return;var c=vtCs.priceToCoordinate(l.price);if(c!==null&&Math.abs(c-y)<bd){bd=Math.abs(c-y);hit=l}});return hit}
@@ -1271,7 +1287,7 @@ function vtApplyLvl(k,price){
 function vtAddStop(k){
   var a=vtAcc(),id=VT.sym,p=a&&a.positions[id],b=VBK[id];if(!vtCs||!a||a.status!=="active")return;
   if(!b||b.ph)return vtToast(L("Harga belum tersedia.","No price yet."),false);
-  var long=p?p.side==="long":VT.side==="buy",ref=p?vtRef(p):(long?b.ask:b.bid),base=p?p.entry:ref,tk=Math.pow(10,-VIX[id].d),up=(k==="tp")===long;
+  var long=p?p.side==="long":VT.side==="buy",ref=p?vtRef(p):(long?b.ask:b.bid),base=p?p.entry:ref,tk=VIX[id].tick?VIX[id].tick*8:Math.pow(10,-VIX[id].d),up=(k==="tp")===long;
   var v=vtDefLvl(base,up);if(!vtStopOk(k,long,v,ref))v=vtDefLvl(ref,up);
   if(!vtStopOk(k,long,v,ref))v=up?ref+tk*20:ref-tk*20;
   if(vtApplyLvl(k,v)){vtSyncLines();vtStopsUI()}}
@@ -1314,7 +1330,7 @@ function vtToast(m,ok){var e=$("vtToast");if(!e){if(!VT.on){try{var d=document.c
   e.textContent=m;e.className="vtToast on "+(ok?"ok":"no");clearTimeout(vtToastT);vtToastT=setTimeout(function(){e.className="vtToast"},4200)}
 function vtPaintNote(m){var e=$("vtNote");if(e)e.textContent=m}
 function vtOpen(id){
-  vtStart();VT.acc=id;VT.on=true;VT.tab="home";VT.sheet=null;
+  vtStart();fuCss();VT.acc=id;VT.on=true;VT.tab="home";VT.sheet=null;
   if(!$("vtApp")){var d=document.createElement("div");d.id="vtApp";document.body.appendChild(d);vtCss()}
   $("vtApp").style.display="flex";document.body.style.overflow="hidden";vtRender()}
 function vtShut(){VT.on=false;vtDrag=null;vtTap=null;if($("vtApp"))$("vtApp").style.display="none";document.body.style.overflow="";if(vtCh){try{vtCh.remove()}catch(e){}vtCh=vtCs=null}dash()}
@@ -1339,24 +1355,26 @@ function vtCss(){
   +".vtLotB{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:118px}.vtLotB>div{display:flex;align-items:center;gap:4px}.vtLotB>div button{width:32px;height:32px;border:1px solid var(--ln);background:#0d0f13;border-radius:9px;font-size:18px;line-height:1;padding:0}.vtLotB input{width:56px;text-align:center;padding:6px 2px;border-radius:9px}"
   +".vtInstB{display:flex;align-items:center;gap:7px;background:none;border:0;color:var(--mu);font-size:12px;font-weight:600;padding:0}.vtInstB.on{color:var(--ac)}.vtSw{position:relative;display:inline-block;width:34px;height:19px;border-radius:99px;background:#292B32}.vtSw:after{content:\"\";position:absolute;top:3px;left:3px;width:13px;height:13px;border-radius:50%;background:#A1A1AA;transition:left .15s}.vtSw.on{background:var(--ac)}.vtSw.on:after{left:18px;background:#080A0D}#vtApp .vtLotB input{width:56px;padding:6px 2px}.vtStick .vtSd{min-width:0;white-space:nowrap;padding:8px 4px}.vtLotB{flex:0 0 auto}.vtTop{display:flex;align-items:center;gap:6px;padding:6px 10px;flex:none}.vtSymB{background:none;border:0;font-size:16px;padding:4px 2px}.vtPxB{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.vtChgB{font-size:12px}#vtApp .vtIcB{background:none;border:0;font-size:20px;line-height:1;padding:4px 6px;color:var(--mu)}.vtTfR{display:flex;align-items:center;gap:4px;padding:0 10px 4px;flex:none;overflow:auto}.vtTfR button{background:none;border:1px solid transparent;border-radius:8px;padding:5px 9px;color:var(--mu);font-size:12px;flex:none}.vtTfR button.on{border-color:var(--ac);color:var(--ac)}.vtNm{margin-left:auto;padding-left:8px;color:var(--mu);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%}.vtChw .vtStops{position:absolute;left:8px;top:8px;z-index:3;margin:0;min-height:0;gap:6px}.vtChw .vtStops button{padding:4px 10px;font-size:12px;background:rgba(13,15,19,.85)}#vtNote{position:absolute;left:8px;bottom:6px;font-size:10px;color:var(--mu);z-index:2;pointer-events:none;max-width:70%}.vtStick .vtSd{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:6px 12px;font-size:11px;min-height:54px;opacity:1}.vtStick .vtBuy{align-items:flex-end}.vtStick .vtSd small{font-size:19px;font-weight:700;opacity:1}.vtStick .vtSd[disabled]{opacity:.35}.vtStick .vtOff{opacity:1}#vtApp input[type=color]{width:46px;height:34px;padding:2px;border-radius:8px}#vtApp input[type=range]{padding:0;border:0;background:none}.vtCfgRow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #15171c}.vtPre{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.vtPre button{display:flex;align-items:center;gap:6px;background:#0d0f13;border:1px solid var(--ln);border-radius:10px;padding:8px 10px}.vtPre button.vtSel{border-color:var(--ac);color:var(--ac)}.vtPre i{width:12px;height:12px;border-radius:3px;display:inline-block}#vtCfgB{background:#0d0f13;border:1px solid var(--ln);border-radius:8px;padding:7px 11px;color:var(--mu)}";
   document.head.appendChild(s)}
-function vtIcon(i){var col={metals:"#F5B84B",forex:"#4C8DF6",indices:"#9B7BFF",crypto:"#F7931A"}[i.c];return'<span class="vtIc" style="background:'+col+'">'+esc(i.id.slice(0,3))+'</span>'}
+function vtIcon(i){var col={metals:"#F5B84B",forex:"#4C8DF6",indices:"#9B7BFF",crypto:"#F7931A",energy:"#A78BFA"}[i.c]||"#3B82F6";return'<span class="vtIc" style="background:'+col+'">'+esc(i.id.slice(0,3))+'</span>'}
 function vtChg(id){var b=VBK[id];if(!b||b.closed||b.ph)return"—";var p=b.pct||0;return(p>0?"+":"")+p.toFixed(2)+"%"}
 function vtNavHtml(){return[["home","⌂","Home"],["mkts","▥","Markets"],["trade","⇄","Trade"],["pos","☷","Positions"],["more","☰","More"]].map(function(k){return'<button type="button" data-vt="'+k[0]+'" class="'+(VT.tab===k[0]?"on":"")+'"><i>'+k[1]+'</i>'+k[2]+'</button>'}).join("")}
 function vtStat(a){var s=vtSnap(a),g=PRG[a.pk],pr=a.target>0?Math.max(0,Math.min(100,(a.balance-a.size)/(a.size*a.target/100)*100)):0;return{s:s,pr:pr,days:PE.ledger(a).days}}
 function vtRender(){
   var a=vtAcc();if(!a){vtShut();return}
+  fuFix(a);
   vtSaveView();
-  var h='<div class="vtHd"><button type="button" id="vtX" aria-label="Back">&#8249;</button><b>VEKXT TRADER</b><small>'+esc(a.program)+" "+kfmt(a.size)+'<br>ID '+esc(a.id)+'</small></div><div class="vtBd'+(VT.tab==="trade"?" vtT":"")+'" id="vtBd">'+vtBody(a)+'</div><div class="vtNav">'+vtNavHtml()+'</div><div class="vtToast" id="vtToast"></div>';
-  $("vtApp").innerHTML=h;vtBind(a);vtPaint();
+  var h='<div class="vtHd"><button type="button" id="vtX" aria-label="Back">&#8249;</button><b>VEKXT TRADER</b>'+(a.fut?'<span class="fuTag">FUTURES</span>':'')+'<small>'+esc(a.program)+" "+kfmt(a.size)+'<br>ID '+esc(a.id)+'</small></div><div class="vtBd'+(VT.tab==="trade"?(a.fut?" fuT":" vtT"):"")+'" id="vtBd">'+vtBody(a)+'</div><div class="vtNav">'+vtNavHtml()+'</div><div class="vtToast" id="vtToast"></div>';
+  $("vtApp").className=a.fut?"fut":"";$("vtApp").innerHTML=h;vtBind(a);vtPaint();
   if(VT.tab==="trade")vtMkChart()}
 function vtStatusTag(a){return a.status==="breached"?'<span class="vtTag r">Breached</span>':a.status==="passed"?'<span class="vtTag g">'+L("Lolos","Passed")+'</span>':a.isFunded?'<span class="vtTag g">Funded</span>':'<span class="vtTag g">'+L("Berjalan","In Progress")+'</span>'}
 function vtBody(a){
+  if(a.fut)return fuBody(a);
   var tb=VT.tab;
   if(tb==="home"){var l=vtList(),sel=l.length>1?'<select id="vtSel">'+l.map(function(x){return'<option value="'+esc(x.id)+'"'+(x.id===a.id?" selected":"")+'>'+esc(x.program)+" "+kfmt(x.size)+" · "+esc(x.id)+(x.status!=="active"?" ("+x.status+")":"")+'</option>'}).join("")+'</select>':"";
     return sel+'<div class="vtC"><h4>Account Balance</h4><div class="vtBig" data-k="bal"></div><div class="vtRow"><span>Equity</span><b data-k="eq"></b></div><div class="vtRow"><span>P/L</span><b data-k="pnl"></b></div></div>'
     +(a.target>0?'<div class="vtC"><h4>'+esc(a.program)+(a.phase?" · "+L("Fase","Phase")+" "+a.phase+"/"+a.phases:"")+' &middot; Challenge</h4><div class="vtRow"><span>'+L("Progres target","Target progress")+'</span><b data-k="pr"></b></div><div class="vtBar"><i data-k="prb" style="width:0"></i></div><div class="vtRow"><span>'+L("Profit","Profit")+' / Target</span><b data-k="tg"></b></div></div>':'<div class="vtC"><h4>'+esc(a.program)+' &middot; '+(a.isFunded?"Funded":"")+'</h4><div class="vtRow"><span>Profit</span><b data-k="pnl2"></b></div></div>')
     +'<div class="vtBS"><button type="button" class="vtBuy" data-go="trade">Trade</button><button type="button" class="vtGh" data-go="mkts" style="flex:1">Markets</button></div><div class="vtBS"><button type="button" class="vtGh" data-go="pos">Positions</button><button type="button" class="vtGh" data-go="more">Challenge</button></div>'}
-  if(tb==="mkts"){var fav=vtFav(),ls=VI.filter(function(i){return VT.cat==="fav"?fav.indexOf(i.id)>-1:i.c===VT.cat});
+  if(tb==="mkts"){var fav=vtFav(),ls=VI.filter(function(i){return !i.fo&&(VT.cat==="fav"?fav.indexOf(i.id)>-1:i.c===VT.cat)});
     return'<div class="vtTabs">'+VCAT.map(function(c){return'<button type="button" data-cat="'+c[0]+'" class="'+(VT.cat===c[0]?"on":"")+'">'+c[1]+'</button>'}).join("")+'</div>'+(ls.length?ls.map(function(i){return'<button type="button" class="vtMk" data-sym="'+i.id+'">'+vtIcon(i)+'<div><b>'+i.id+'</b><small>'+esc(i.n)+'</small></div><span><b data-p="'+i.id+'">—</b><small data-c="'+i.id+'">—</small></span></button>'}).join(""):'<p class="vtRow">'+L("Belum ada favorit. Buka instrumen lalu tekan bintang.","No favorites yet. Open an instrument and tap the star.")+'</p>')}
   if(tb==="trade")return vtTradeHtml(a);
   if(tb==="pos")return vtPosHtml(a);
@@ -1458,7 +1476,8 @@ function vtPaint(){
   var i=VIX[VT.sym],ml=$("vtLot");if(VT.tab==="trade"&&ml){var b=VBK[i.id],lots=+ml.value||0,px=b&&!b.ph?(VT.side==="buy"?b.ask:b.bid):0;
     vtSet('[data-k="mreq"]',px&&lots?vtM(lots*i.cs*px*(PE.QC[i.id]?PE.QC[i.id](px):1)/i.lev):"—");vtSet('[data-k="sprd"]',b&&!b.ph&&lots?vtM(lots*i.cs*(b.ask-b.bid)*(PE.QC[i.id]?PE.QC[i.id](b.mid):1)):"—")}
   var sig=Object.keys(a.positions).join()+a.orders.length+(a.trades||[]).length+a.status;if(VT.tab==="pos"&&sig!==vtSig){vtSig=sig;vtRender()}vtSig=sig;
-  if(VT.tab==="trade")vtSyncLines()}
+  if(VT.tab==="trade")vtSyncLines();
+  if(a.fut)fuPaint(a,s)}
 /* ---- aksi ---- */
 function vtPrice(){var b=VBK[VT.sym];return b&&!b.ph?(VT.side==="buy"?b.ask:b.bid):0}
 function vtOrder(side,ot,lots,px0,sl,tp){
@@ -1472,7 +1491,7 @@ function vtOrder(side,ot,lots,px0,sl,tp){
   if(lim&&(buy?px>=b.ask:px<=b.bid))return vtToast(buy?L("Buy limit harus di bawah harga beli.","Buy limit must be below the ask."):L("Sell limit harus di atas harga jual.","Sell limit must be above the bid."),false);
   if(sl&&(buy?sl>=px:sl<=px))return vtToast(L("Stop Loss di sisi yang salah.","Stop Loss is on the wrong side."),false);
   if(tp&&(buy?tp<=px:tp>=px))return vtToast(L("Take Profit di sisi yang salah.","Take Profit is on the wrong side."),false);
-  var r=PE.placeOrder(a,{symbol:i.id,side:side,qty:Math.round(lots*i.cs*1e8)/1e8,type:ot,price:lim?px:0,sl:sl||0,tp:tp||0},VBK,VCFG);
+  var r=PE.placeOrder(a,{symbol:i.id,side:side,qty:Math.round(lots*i.cs*1e8)/1e8,type:ot,price:lim?px:0,sl:sl||0,tp:tp||0},VBK,fuCfg(a));
   if(!r.ok)return vtToast(L(VERR[r.error]?VERR[r.error][0]:r.error,VERR[r.error]?VERR[r.error][1]:r.error),false);
   pSave();pPush(true);
   var ev=r.events||[],op=ev.filter(function(e){return e.type==="open"})[0],cl=ev.filter(function(e){return e.type==="close"})[0];
@@ -1492,21 +1511,21 @@ function vtInstUI(){var bar=$("vtBar"),sw=$("vtInst");if(bar)bar.classList.toggl
 function vtClosePos(s){
   var a=vtAcc(),p=a&&a.positions[s];if(!p)return;
   if(!vtLive(s))return vtToast(L("Pasar tutup. Posisi belum bisa ditutup.","Market closed. Cannot close the position yet."),false);
-  var r=PE.placeOrder(a,{symbol:s,side:p.side==="long"?"sell":"buy",qty:p.qty,type:"market",reduceOnly:true},VBK,VCFG);
+  var r=PE.placeOrder(a,{symbol:s,side:p.side==="long"?"sell":"buy",qty:p.qty,type:"market",reduceOnly:true},VBK,fuCfg(a));
   if(!r.ok)return vtToast(r.error,false);pSave();pPush(true);VT.sheet=null;vtRender()}
 function vtSheetOpen(s){
   var a=vtAcc(),p=a&&a.positions[s];if(!p)return;var i=VIX[s],long=p.side==="long";VT.sheet=s;
   var d=document.createElement("div");d.className="vtSheet";d.id="vtSheet";
-  d.innerHTML='<div><div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="vtTag '+(long?"g":"r")+'">'+(long?"BUY":"SELL")+'</span><b>'+(p.qty/i.cs).toFixed(2)+' lot '+s+'</b></div><div class="vtRow"><span>Entry Price</span><b>'+vtFmt(s,p.entry)+'</b></div><div class="vtRow"><span>Current Price</span><b data-p="'+s+'" data-side="'+p.side+'"></b></div><div class="vtRow"><span>P/L</span><b data-pp="'+s+'"></b></div><span class="vtLb">Stop Loss</span><input id="shSl" inputmode="decimal" value="'+(p.sl||"")+'"><span class="vtLb">Take Profit</span><input id="shTp" inputmode="decimal" value="'+(p.tp||"")+'"><div class="vtBS" style="margin-top:14px"><button type="button" class="vtGh" id="shClose">Close</button><button type="button" class="vtBtn" id="shMod">Modify</button></div><button type="button" class="vtTag" id="shX" style="width:100%;padding:10px">'+L("Tutup","Dismiss")+'</button></div>';
+  d.innerHTML='<div><div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="vtTag '+(long?"g":"r")+'">'+(long?"BUY":"SELL")+'</span><b>'+vtLotStr(p.qty,i)+s+'</b></div><div class="vtRow"><span>Entry Price</span><b>'+vtFmt(s,p.entry)+'</b></div><div class="vtRow"><span>Current Price</span><b data-p="'+s+'" data-side="'+p.side+'"></b></div><div class="vtRow"><span>P/L</span><b data-pp="'+s+'"></b></div><span class="vtLb">Stop Loss</span><input id="shSl" inputmode="decimal" value="'+(p.sl||"")+'"><span class="vtLb">Take Profit</span><input id="shTp" inputmode="decimal" value="'+(p.tp||"")+'"><div class="vtBS" style="margin-top:14px"><button type="button" class="vtGh" id="shClose">Close</button><button type="button" class="vtBtn" id="shMod">Modify</button></div><button type="button" class="vtTag" id="shX" style="width:100%;padding:10px">'+L("Tutup","Dismiss")+'</button></div>';
   $("vtApp").appendChild(d);vtPaint();
   $("shX").onclick=function(){d.remove();VT.sheet=null};$("shClose").onclick=function(){d.remove();vtClosePos(s)};
-  $("shMod").onclick=function(){var sl=+$("shSl").value||0,tp=+$("shTp").value||0,b=VBK[s],ref=long?b.bid:b.ask;
+  $("shMod").onclick=function(){var sl=+$("shSl").value||0,tp=+$("shTp").value||0,b=VBK[s],ref=long?b.bid:b.ask;if(sl)sl=vtRound(s,sl);if(tp)tp=vtRound(s,tp);
     if(sl&&(long?sl>=ref:sl<=ref))return vtToast(L("Stop Loss di sisi yang salah.","Stop Loss is on the wrong side."),false);
     if(tp&&(long?tp<=ref:tp>=ref))return vtToast(L("Take Profit di sisi yang salah.","Take Profit is on the wrong side."),false);
     PE.setStops(a,s,{sl:sl,tp:tp});pSave();pPush(true);d.remove();VT.sheet=null;vtToast(L("SL/TP diperbarui.","SL/TP updated."),true);vtRender()}}
 function vtPickHtml(){
   var d=document.createElement("div");d.className="vtSheet";d.id="vtPickS";
-  d.innerHTML='<div><b>'+L("Pilih instrumen","Select instrument")+'</b>'+VI.map(function(i){return'<button type="button" class="vtMk" data-pk="'+i.id+'">'+vtIcon(i)+'<div><b>'+i.id+'</b><small>'+esc(i.n)+'</small></div></button>'}).join("")+'</div>';
+  d.innerHTML='<div><b>'+L("Pilih instrumen","Select instrument")+'</b>'+VI.filter(function(i){return !i.fo}).map(function(i){return'<button type="button" class="vtMk" data-pk="'+i.id+'">'+vtIcon(i)+'<div><b>'+i.id+'</b><small>'+esc(i.n)+'</small></div></button>'}).join("")+'</div>';
   $("vtApp").appendChild(d);d.onclick=function(e){var b=e.target.closest("[data-pk]");if(b){VT.sym=b.dataset.pk;d.remove();vtRender()}else if(e.target===d)d.remove()}}
 function vtBind(a){
   var A=$("vtApp");$("vtX").onclick=vtShut;
@@ -1521,6 +1540,7 @@ function vtBind(a){
   var ca=$("vtCloseAll");if(ca)ca.onclick=function(){Object.keys(a.positions).forEach(vtClosePos);vtRender()};
   var bk=$("vtBack");if(bk)bk.onclick=vtShut;
   var sel=$("vtSel");if(sel)sel.onchange=function(){VT.acc=sel.value;vtRender()};
+  if(a.fut){fuBind(a);return}
   if(VT.tab!=="trade")return;
   var st=$("vtStar");if(st)st.onclick=function(){var f=vtFav(),k=f.indexOf(VT.sym);if(k>-1)f.splice(k,1);else f.push(VT.sym);vtFavSet(f);vtRender()};
   $("vtPick").onclick=vtPickHtml;
@@ -1539,15 +1559,319 @@ function vtBind(a){
   $("vtStops").onclick=function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.st)vtAddStop(b.dataset.st);else if(b.dataset.rm)vtRmStop(b.dataset.rm)};
   var chg=function(){vtLsig="";vtSyncLines();vtStopsUI()};$("vtSl").oninput=chg;$("vtTp").oninput=chg;
   var ob=$("vtOrdB");if(ob)ob.onclick=function(){vtOrdSheet()};var cfb=$("vtCfgB");if(cfb)cfb.onclick=vtCfgSheet;vtStopsUI()}
-function vtRows(){
-  return vtList().map(function(a){if((a.status!=="active")!==(accTab==="inactive"))return"";
+/* ===== VEKXT FUTURES: terminal simulasi futures gaya CME. Dasar harga: Biquote (spot/CFD) dibulatkan ke tick, bukan harga kontrak bursa. Mesin: PE (opsi futures). Margin dan komisi di bawah adalah angka awal, ubah di FI ===== */
+/* m = pengali ($ per poin), tick = langkah harga, mg = margin harian per kontrak ($), fee = komisi per kontrak per sisi ($), w = bobot terhadap batas kontrak (1 = mini, 0.1 = micro) */
+var FI=[
+{id:"MNQ",n:"Micro E-mini Nasdaq-100",g:"idx",base:"NAS100",m:2,tick:.25,mg:100,fee:.5,w:.1},
+{id:"NQ",n:"E-mini Nasdaq-100",g:"idx",base:"NAS100",m:20,tick:.25,mg:1000,fee:2,w:1},
+{id:"MES",n:"Micro E-mini S&P 500",g:"idx",base:"US500",m:5,tick:.25,mg:50,fee:.5,w:.1},
+{id:"ES",n:"E-mini S&P 500",g:"idx",base:"US500",m:50,tick:.25,mg:500,fee:2,w:1},
+{id:"MGC",n:"Micro Gold",g:"met",base:"XAUUSD",m:10,tick:.1,mg:100,fee:.5,w:.1},
+{id:"GC",n:"Gold",g:"met",base:"XAUUSD",m:100,tick:.1,mg:1000,fee:2,w:1},
+{id:"MCL",n:"Micro Crude Oil WTI",g:"eng",base:"USOIL",m:100,tick:.01,mg:50,fee:.5,w:.1},
+{id:"CL",n:"Crude Oil WTI",g:"eng",base:"USOIL",m:1000,tick:.01,mg:500,fee:2,w:1}];
+var FCAT=[["all","Semua","All"],["idx","Index","Index"],["met","Metals","Metals"],["eng","Energy","Energy"]];
+var FSIZES=[25000,50000,100000],FCAP={25000:3,50000:5,100000:10},FPRICE={25000:[100,75],50000:[190,140],100000:[350,260]};
+var FIX={},FB={},FCFGS={},FCFG={takerFee:0,makerFee:0,defaultLev:1,maxLev:1,levMax:{},mmr:0.005,slippage:0,maxSpread:0.05,mgU:{},feeU:{},wU:{},capU:0,mmFut:0.5};
+FI.forEach(function(i){i.cs=i.m;i.d=2;i.fut=1;i.lev=1;i.c="futures";i.u="pt";i.a=(VIX[i.base]||{a:[i.base]}).a;FIX[i.id]=i;VIX[i.id]=i;(FB[i.base]=FB[i.base]||[]).push(i);
+  FCFG.mgU[i.id]=i.mg/i.m;FCFG.feeU[i.id]=i.fee/i.m;FCFG.wU[i.id]=i.w/i.m});
+var FU={fh:0,lc:false,rc:false,full:false,tab:"pos",cat:"all",q:"",pend:null,pendT:0};
+try{var _fp=JSON.parse(localStorage.getItem("fuPref")||"{}");FU.fh=+_fp.fh||0;FU.lc=!!_fp.lc;FU.rc=!!_fp.rc}catch(e){}
+function fuSavePref(){try{localStorage.setItem("fuPref",JSON.stringify({fh:FU.fh,lc:FU.lc,rc:FU.rc}))}catch(e){}}
+function fuFh(){return FU.fh>0?FU.fh:Math.round(Math.max(240,(window.innerHeight-150)*0.45))}
+function fuCfg(a){if(!a||!a.fut)return VCFG;var c=FCFGS[a.size];if(!c){c=Object.assign({},FCFG,{capU:FCAP[a.size]||Math.max(1,a.size/10000)});FCFGS[a.size]=c}return c}
+function fuFix(a){if(a.fut&&!FIX[VT.sym]){VT.sym="MNQ";VT.lot=1}else if(!a.fut&&FIX[VT.sym]){VT.sym="XAUUSD";VT.lot=0.1}if(a.fut)VT.lot=Math.max(1,Math.round(VT.lot)||1)}
+function fuTick(a){vtPaint()}
+function fuPs(a){
+  var p=a.positions[VT.sym];if(!p)return"";var i=VIX[VT.sym],long=p.side==="long";
+  return'<span class="fSd '+(long?"up":"dn")+'">'+(long?"LONG":"SHORT")+'</span><b>'+Math.round(p.qty/i.cs)+' ct</b><small>@ '+vtFmt(i.id,p.entry)+'</small><b data-pp="'+i.id+'" class="fPsP">&mdash;</b><small data-ptk="'+i.id+'"></small><span style="flex:1"></span><button type="button" class="fBtn" data-pos="'+i.id+'">SL/TP</button><button type="button" class="fBtn x" data-fcl="'+i.id+'">Close</button>'}
+function fuCap(a){return FCAP[a.size]||Math.max(1,a.size/10000)}
+function fuTv(i){return i.m*i.tick}
+function fuRound(i,v){return+(Math.round(v/i.tick)*i.tick).toFixed(i.d)}
+function fuIcon(i){var col={idx:"#60A5FA",met:"#F5B84B",eng:"#A78BFA"}[i.g]||"#60A5FA";return'<span class="vtIc" style="background:'+col+'">'+esc(i.id.slice(0,3))+'</span>'}
+function fuDerive(id,ts){var b=VBK[id];FB[id].forEach(function(c){var tk=c.tick,bd=Math.floor(b.mid/tk+1e-9)*tk;bd=+bd.toFixed(c.d);var ak=+(bd+tk).toFixed(c.d);
+  VBK[c.id]={bid:bd,ask:ak,mid:+((bd+ak)/2).toFixed(c.d+1),pct:b.pct,hi:b.hi,lo:b.lo,ts:b.ts,rx:b.rx,closed:b.closed};vtCandle(c.id,b.mid,ts)})}
+/* ---- akun uji (gratis, hanya untuk demo; pembelian sungguhan lewat Worker dengan program "fut") ---- */
+var FUT_DEMO=true; /* true = tombol akun uji gratis tampil di dashboard Futures. Ubah ke false saat penjualan dibuka. Akun uji tidak ikut leaderboard. */
+function fuNew(size){var id="VF-"+Math.floor(10000+Math.random()*90000),a=vtNewAcc(id,id,"fut",size,1,false);a.demo=1;vtAdd(a);pSave();pPush(true);vtStart();dash()}
+document.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-fnew]");if(!b)return;e.preventDefault();if(PM==="fut")fuNew(+b.dataset.fnew)});
+function futHome(){
+  pLoadAll();vtBoot();
+  var va=selV!==null?vtById(selV):null;
+  if(va&&va.fut)return vtDetail(va);
+  selV=null;
+  var x=modeSw(),l=futList(),nA=l.filter(function(c){return c.status==="active"}).length,nI=l.length-nA;
+  if(l.length){
+    x+='<div class="lg-tabs" role="group" id="accTabs"><button type="button" data-at="active" aria-pressed="'+(accTab==="active")+'">'+t("tabActive")+' ('+nA+')</button><button type="button" data-at="inactive" aria-pressed="'+(accTab==="inactive")+'">'+t("tabInactive")+' ('+nI+')</button></div>';
+    if(accTab==="inactive"?!nI:!nA)x+='<div class="lg-card"><p>'+t("accTabNone")+'</p></div>';
+    x+='<p class="acc-hint">'+t("accHint")+'</p>'+vtRows(futList)}
+  x+='<div class="lg-card"><b>'+L("Akun Futures","Futures accounts")+'</b><p class="acc-hint">'+L("Akun yang kamu beli muncul di sini otomatis setelah pembayaran terkonfirmasi. Aturan: 1 step, trailing drawdown 4% (terkunci di saldo awal), target profit 6%, tanpa daily drawdown.","Accounts you buy appear here automatically once payment is confirmed. Rules: 1 step, 4% trailing drawdown (locked at the starting balance), 6% profit target, no daily drawdown.")+'</p><a class="lg-btn ghost" href="/p/futures.html">'+L("Beli akun Futures","Buy a Futures account")+'</a></div>';
+  if(FUT_DEMO)x+='<div class="lg-card"><b>'+L("Akun uji (demo)","Test account (demo)")+'</b><p class="acc-hint">'+L("Buat akun simulasi gratis untuk mencoba terminal. Bukan akun challenge sungguhan.","Create a free simulated account to try the terminal. Not a real challenge account.")+'</p><div class="pchips">'+FSIZES.map(function(z){return'<button type="button" class="pchip" data-fnew="'+z+'">'+kfmt(z)+'</button>'}).join("")+'</div></div>';
+  return x}
+/* ---- tampilan ---- */
+function fuMkRows(){
+  var q=String(FU.q||"").toUpperCase(),l=FI.filter(function(i){return(FU.cat==="all"||i.g===FU.cat)&&(!q||i.id.indexOf(q)>-1||i.n.toUpperCase().indexOf(q)>-1)});
+  return l.length?l.map(function(i){return'<button type="button" class="fRow'+(i.id===VT.sym?" on":"")+'" data-sym="'+i.id+'">'+fuIcon(i)+'<div><b>'+i.id+'</b><small>'+esc(i.n)+'</small></div><span class="fRp"><b data-p="'+i.id+'">&mdash;</b><small data-c="'+i.id+'">&mdash;</small></span></button>'}).join(""):'<p class="fEmpty">'+L("Kontrak tidak ditemukan.","No contract found.")+'</p>'}
+function fuCats(){return FCAT.map(function(c){return'<button type="button" data-fcat="'+c[0]+'" class="'+(FU.cat===c[0]?"on":"")+'">'+L(c[1],c[2])+'</button>'}).join("")}
+function fuMkHtml(){return'<div class="fMkH"><b>Futures</b><small>'+L("Simulasi gaya CME","CME-style simulation")+'</small></div><input id="fSrch" type="search" autocomplete="off" placeholder="'+L("Cari kontrak","Search contract")+'" value="'+esc(FU.q||"")+'"><div class="vtCh fCat" id="fCats">'+fuCats()+'</div><div id="fMkL">'+fuMkRows()+'</div>'}
+function fuMarkets(a){return'<div class="vtTabs" id="fCats">'+fuCats()+'</div><div id="fMkL">'+FI.filter(function(i){return FU.cat==="all"||i.g===FU.cat}).map(function(i){return'<button type="button" class="vtMk" data-sym="'+i.id+'">'+fuIcon(i)+'<div><b>'+i.id+'</b><small>'+esc(i.n)+' · $'+fuTv(i)+'/tick</small></div><span><b data-p="'+i.id+'">&mdash;</b><small data-c="'+i.id+'">&mdash;</small></span></button>'}).join("")+'</div><p class="vtHint">'+L("Harga dasar dari Biquote (spot/CFD), bukan harga kontrak bursa. Dibulatkan ke tick kontrak.","Base price from Biquote (spot/CFD), not the exchange contract price. Rounded to the contract tick.")+'</p>'}
+function fuHome(a){
+  var l=vtAll().filter(function(x){return x.fut}),sel=l.length>1?'<select id="vtSel">'+l.map(function(x){return'<option value="'+esc(x.id)+'"'+(x.id===a.id?" selected":"")+'>'+esc(x.program)+" "+kfmt(x.size)+" · "+esc(x.id)+(x.status!=="active"?" ("+x.status+")":"")+'</option>'}).join("")+'</select>':"";
+  return sel+'<div class="vtC"><h4>Account Balance</h4><div class="vtBig" data-k="bal"></div><div class="vtRow"><span>Equity</span><b data-k="eq"></b></div><div class="vtRow"><span>P/L</span><b data-k="pnl"></b></div></div>'
+  +(a.target>0?'<div class="vtC"><h4>'+esc(a.program)+' &middot; Challenge</h4><div class="vtRow"><span>'+L("Progres target","Target progress")+'</span><b data-k="pr"></b></div><div class="vtBar"><i data-k="prb" style="width:0"></i></div><div class="vtRow"><span>Profit / Target</span><b data-k="tg"></b></div></div>':'<div class="vtC"><h4>'+esc(a.program)+' &middot; '+(a.isFunded?"Funded":"")+'</h4><div class="vtRow"><span>Profit</span><b data-k="pnl2"></b></div></div>')
+  +'<div class="vtC"><h4>Max Drawdown ('+a.rules.maxDd+'% trailing)</h4><div class="vtRow"><span>'+L("Batas equity (floor)","Equity floor")+'</span><b data-k="floor"></b></div><div class="vtRow"><span>'+L("Sisa ruang","Buffer left")+'</span><b data-k="buf"></b></div><div class="vtBar fBuf"><i data-k="bufb" style="width:0"></i></div><div class="vtRow"><span>'+L("Terpakai / batas","Used / limit")+'</span><b data-k="md"></b></div></div>'
+  +'<div class="vtBS"><button type="button" class="vtBuy fGo" data-go="trade">Trade</button><button type="button" class="vtGh" data-go="mkts" style="flex:1">Markets</button></div><div class="vtBS"><button type="button" class="vtGh" data-go="pos">Positions</button><button type="button" class="vtGh" data-go="more">Challenge</button></div>'}
+function fuAccStrip(){return'<div class="fAcc"><div><small>Balance</small><b data-k="bal">&mdash;</b></div><div><small>Equity</small><b data-k="eq">&mdash;</b></div><div><small>P/L</small><b data-k="pnl">&mdash;</b></div><div><small>'+L("Batas DD","DD floor")+'</small><b data-k="floor">&mdash;</b></div></div>'}
+function fuTicket(a){
+  var i=VIX[VT.sym],ot=VT.ot,on=a.status==="active",q=Math.max(1,Math.round(VT.lot)||1);
+  var cap=fuCap(a);
+  return'<div class="fTkH"><b>'+i.id+' · '+L("Order","Order")+'</b><button type="button" id="fTkX" class="fIb">&#10005;</button></div>'+fuAccStrip()
+  +'<div class="vtTabs fOt">'+[["market","Market"],["limit","Limit"],["stop","Stop"]].map(function(o){return'<button type="button" data-ot="'+o[0]+'" class="'+(ot===o[0]?"on":"")+'">'+o[1]+'</button>'}).join("")+'</div>'
+  +'<span class="vtLb">'+L("Jumlah (kontrak)","Quantity (contracts)")+'</span><div class="vtLot"><button type="button" data-q="-">−</button><input id="fQty" inputmode="numeric" value="'+q+'"><button type="button" data-q="+">+</button></div>'
+  +'<div class="vtCh fQc">'+[1,2,3,5,10].map(function(v){return'<button type="button" data-qq="'+v+'">'+v+'</button>'}).join("")+'</div>'
+  +(ot!=="market"?'<span class="vtLb">'+(ot==="limit"?L("Harga limit","Limit price"):L("Harga stop","Stop price"))+'</span><div class="vtLot"><button type="button" data-px="-">−</button><input id="fPx" inputmode="decimal"><button type="button" data-px="+">+</button></div>':"")
+  +'<span class="vtLb">Take Profit (TP)</span><input id="vtTp" inputmode="decimal" placeholder="—"><span class="vtLb">Stop Loss (SL)</span><input id="vtSl" inputmode="decimal" placeholder="—">'
+  +'<div class="fCalc" id="fCalc"><div class="vtRow"><span>Margin</span><b data-k="fmg">&mdash;</b></div><div class="vtRow"><span>'+L("Komisi","Commission")+'</span><b data-k="ffee">&mdash;</b></div><div class="vtRow"><span>'+L("Risiko ke SL","Risk to SL")+'</span><b data-k="frisk">&mdash;</b></div><div class="vtRow"><span>'+L("Target TP","Reward to TP")+'</span><b data-k="frew">&mdash;</b></div><div class="vtRow"><span>'+L("Nilai per tick","Tick value")+'</span><b>$'+fuTv(i)+'</b></div><div class="vtRow"><span>'+L("Batas kontrak","Contract limit")+'</span><b>'+cap+' mini / '+cap*10+' micro</b></div></div>'
+  +'<div class="fBS"><button type="button" class="fSell" data-fo="sell"'+(on?"":" disabled")+'><span data-flb="sell">Sell</span><small data-bid="'+i.id+'">&mdash;</small></button><button type="button" class="fBuy" data-fo="buy"'+(on?"":" disabled")+'><span data-flb="buy">Buy</span><small data-ask="'+i.id+'">&mdash;</small></button></div>'
+  +'<button type="button" class="vtInstB fInstB'+(VT.inst?" on":"")+'" data-finst="1"><span class="vtSw'+(VT.inst?" on":"")+'"></span>⚡ '+L("Instan order (satu ketukan di bar bawah)","Instant order (one tap on the quick bar)")+'</button>'}
+function fuQuickBar(a,i){
+  var q=Math.max(1,Math.round(VT.lot)||1),on=a.status==="active";
+  return'<div class="fQ'+(VT.inst?" inst":"")+'" id="fQ"><button type="button" class="fSell" data-fq="sell"'+(on?"":" disabled")+'><span>SELL</span><small data-bid="'+i.id+'">&mdash;</small></button><div class="fQm"><div><button type="button" data-q="-">−</button><input id="fQtyB" inputmode="numeric" value="'+q+'"><button type="button" data-q="+">+</button></div><button type="button" class="vtInstB fInstB'+(VT.inst?" on":"")+'" data-finst="1"><span class="vtSw'+(VT.inst?" on":"")+'"></span>⚡ '+L("Instan","Instant")+'</button></div><button type="button" class="fBuy" data-fq="buy"'+(on?"":" disabled")+'><span>BUY</span><small data-ask="'+i.id+'">&mdash;</small></button></div>'}
+function fuPosRow(a,s){
+  var p=a.positions[s],i=VIX[s],long=p.side==="long",q=Math.round(p.qty/i.cs);
+  return'<div class="fRowP"><div class="fRc1"><span class="fSd '+(long?"up":"dn")+'">'+(long?"LONG":"SHORT")+'</span><b>'+s+'</b><small>'+q+' ct</small></div>'
+  +'<div class="fRc2"><small>Entry</small><b>'+vtFmt(s,p.entry)+'</b></div><div class="fRc2"><small>Mark</small><b data-p="'+s+'" data-side="'+p.side+'">&mdash;</b></div>'
+  +'<div class="fRc3"><b data-pp="'+s+'">&mdash;</b><small data-ptk="'+s+'"></small></div>'
+  +'<div class="fRc2"><small>SL / TP</small><b>'+(p.sl?vtFmt(s,p.sl):"—")+' / '+(p.tp?vtFmt(s,p.tp):"—")+'</b></div>'
+  +'<div class="fRc4"><button type="button" class="fBtn" data-pos="'+s+'">SL/TP</button><button type="button" class="fBtn x" data-fcl="'+s+'">Close</button></div></div>'}
+function fuPane(a){
+  var k=FU.tab,x="",empty=function(m){return'<p class="fEmpty">'+m+'</p>'};
+  if(k==="pos"){var ps=Object.keys(a.positions);
+    x=ps.length?ps.map(function(s){return fuPosRow(a,s)}).join("")+'<button type="button" class="vtGh fAll" id="vtCloseAll">Flatten ('+L("tutup semua","close all")+')</button>':empty(L("Tidak ada posisi terbuka.","No open positions."))}
+  else if(k==="ord"){x=a.orders.length?a.orders.map(function(o){var i=VIX[o.symbol],stp=o.kind==="stop";
+    return'<div class="fRowP"><div class="fRc1"><span class="fSd '+(o.side==="buy"?"up":"dn")+'">'+o.side.toUpperCase()+'</span><b>'+o.symbol+'</b><small>'+(stp?"STOP":"LIMIT")+' · '+Math.round(o.qty/i.cs)+' ct</small></div><div class="fRc2"><small>'+L("Harga","Price")+'</small><b>'+vtFmt(o.symbol,o.price)+'</b></div><div class="fRc4"><button type="button" class="fBtn x" data-cx="'+o.id+'">'+L("Batal","Cancel")+'</button></div></div>'}).join(""):empty(L("Tidak ada order tertunda.","No pending orders."))}
+  else if(k==="his"){var tr=(a.trades||[]).slice(-60).reverse();
+    x=tr.length?tr.map(function(r){var i=VIX[r.s],tk=i?Math.round((r.d==="BUY"?r.c-r.o:r.o-r.c)/i.tick):0,why={sl:"SL",tp:"TP",liq:L("Likuidasi","Liquidated")}[r.w];
+      return'<div class="fRowP"><div class="fRc1"><span class="fSd '+(r.d==="BUY"?"up":"dn")+'">'+(r.d==="BUY"?"LONG":"SHORT")+'</span><b>'+r.s+'</b><small>'+(i?Math.round(r.v/i.cs):r.v)+' ct'+(why?' · '+why:'')+'</small></div><div class="fRc2"><small>'+L("Masuk","Entry")+' → '+L("Keluar","Exit")+'</small><b>'+vtFmt(r.s,r.o)+' → '+vtFmt(r.s,r.c)+'</b></div><div class="fRc3"><b class="'+(r.p>=0?"up":"dn")+'">'+(r.p>0?"+":"")+vtM(r.p)+'</b><small>'+(tk>0?"+":"")+tk+' ticks</small></div></div>'}).join(""):empty(L("Belum ada riwayat.","No history yet."))}
+  else{var rw=function(l,v){return'<div class="vtRow"><span>'+l+'</span><b'+(v.k?' data-k="'+v.k+'"':'')+'>'+(v.t||"&mdash;")+'</b></div>'};
+    x='<div class="fAccG">'+rw("Balance",{k:"bal"})+rw("Equity",{k:"eq"})+rw("P/L",{k:"pnl"})+rw(L("Margin terpakai","Used margin"),{k:"um"})+rw(L("Margin bebas","Free margin"),{k:"fm"})+rw("Margin level",{k:"ml"})+rw(L("Batas equity (floor)","Equity floor"),{k:"floor"})+rw(L("Sisa ruang drawdown","Drawdown buffer"),{k:"buf"})+'</div>'}
+  return x}
+function fuBotInner(a){
+  var n=Object.keys(a.positions).length,no=a.orders.length;
+  var tabs=[["pos",L("Posisi","Positions")+(n?" ("+n+")":"")],["ord",L("Order","Orders")+(no?" ("+no+")":"")],["his",L("Riwayat","History")],["acc",L("Akun","Account")]];
+  return'<div class="vtTabs fBt">'+tabs.map(function(t){return'<button type="button" data-ft="'+t[0]+'" class="'+(FU.tab===t[0]?"on":"")+'">'+t[1]+'</button>'}).join("")+'</div><div class="fPane" id="fPane">'+fuPane(a)+'</div>'}
+function fuTrade(a){
+  var i=VIX[VT.sym];
+  var hd='<div class="fHd">'+fuIcon(i)+'<div class="fHn"><button type="button" id="vtPick" class="fSymB"><b>'+i.id+'</b> &#9662;</button><small>'+esc(i.n)+' · '+L("Kontinu","Continuous")+'</small></div>'
+   +'<div class="fPx"><b data-p="'+i.id+'">&mdash;</b><span data-c="'+i.id+'"></span></div>'
+   +'<div class="fHL"><small>H <b data-hi="'+i.id+'">&mdash;</b></small><small>L <b data-lo="'+i.id+'">&mdash;</b></small><small>'+L("Tick","Tick")+' <b>'+i.tick+' = $'+fuTv(i)+'</b></small></div><span class="vtTag" data-m="'+i.id+'"></span>'
+   +'<div class="fAct"><button type="button" id="fBtnL" class="fIb" title="'+L("Daftar kontrak","Contract list")+'">☰</button><button type="button" id="fBtnR" class="fIb" title="'+L("Tiket order","Order ticket")+'">▤</button><button type="button" id="vtCfgB" class="fIb" title="'+L("Pengaturan chart","Chart settings")+'">&#9881;</button><button type="button" id="fBtnT" class="fIb fOrdB">Order</button><button type="button" id="fBtnFull" class="fIb" title="'+L("Perluas chart","Expand chart")+'">⤢</button></div></div>';
+  var tfs='<div class="vtCh fTf">'+VTF.map(function(f,k){return'<button type="button" data-tf="'+k+'" class="'+(VT.tf===k?"on":"")+'">'+f[1]+'</button>'}).join("")+'</div>';
+  return'<div class="fT'+(FU.full?" full":"")+(FU.lc?" lc":"")+(FU.rc?" rc":"")+'" id="fT" style="--fh:'+fuFh()+'px">'
+   +'<aside class="fMk">'+fuMkHtml()+'</aside>'
+   +'<section class="fMain">'+hd+tfs+'<div class="fPs'+(a.positions[VT.sym]?" on":"")+'" id="fPs">'+fuPs(a)+'</div><div class="fChw"><div id="vtCh"></div></div>'
+   +'<div class="fSplit" id="fSplit" role="separator" aria-orientation="horizontal" tabindex="0" title="'+L("Tarik untuk ubah tinggi chart (klik dua kali: reset)","Drag to resize the chart (double-click: reset)")+'"><i></i></div>'
+   +'<div class="fSt"><div class="vtStops" id="vtStops"></div><div class="vtHint" id="vtHint"></div><div id="vtNote" class="fNote"></div></div>'
+   +'<div class="fBot" id="fBot">'+fuBotInner(a)+'</div></section>'
+   +'<aside class="fTk" id="fTk">'+fuTicket(a)+'</aside>'
+   +fuQuickBar(a,i)+'<div class="fTkBd" id="fTkBd"></div></div>'}
+function fuMore(a){
+  var cap=fuCap(a),r=a.rules;
+  var rules='<div class="vtRow"><span>Challenge</span><b>1 step</b></div><div class="vtRow"><span>Max Drawdown</span><b>'+r.maxDd+'% trailing</b></div><div class="vtRow"><span>'+L("Trailing terkunci di","Trailing locks at")+'</span><b>'+vtM(a.size)+'</b></div><div class="vtRow"><span>Daily Drawdown</span><b>'+L("Tidak ada","None")+'</b></div>'+(a.target>0?'<div class="vtRow"><span>Profit Target</span><b>'+a.target+'%</b></div>':"")+'<div class="vtRow"><span>'+L("Batas kontrak","Contract limit")+'</span><b>'+cap+' mini / '+cap*10+' micro</b></div>';
+  return'<div class="vtC"><div style="display:flex;justify-content:space-between;align-items:center"><b>Challenge</b>'+vtStatusTag(a)+'</div>'+(a.target>0?'<div class="vtRow"><span>'+L("Progres target","Target progress")+'</span><b data-k="pr"></b></div><div class="vtBar"><i data-k="prb" style="width:0"></i></div>':"")
+  +'<div class="vtRow"><span>Account Balance</span><b data-k="bal"></b></div><div class="vtRow"><span>Equity</span><b data-k="eq"></b></div><div class="vtRow"><span>'+L("Batas equity (floor)","Equity floor")+'</span><b data-k="floor"></b></div><div class="vtRow"><span>Max Drawdown</span><b data-k="md"></b></div></div>'
+  +'<div class="vtC"><h4>Rules</h4>'+rules+'</div>'
+  +'<div class="vtC"><h4>'+L("Spesifikasi kontrak","Contract specs")+'</h4>'+FI.map(function(i){return'<div class="vtRow"><span><b>'+i.id+'</b> · $'+i.m+'/'+L("poin","pt")+'</span><b>tick '+i.tick+' = $'+fuTv(i)+' · margin $'+i.mg+' · $'+i.fee+'/side</b></div>'}).join("")+'<p class="vtHint">'+L("Simulasi. Harga dasar dari Biquote (spot/CFD), bukan harga kontrak bursa; margin dan komisi adalah angka simulasi.","Simulation. Base price from Biquote (spot/CFD), not the exchange contract price; margin and commission are simulated figures.")+'</p></div>'
+  +'<div class="vtBS"><button type="button" class="vtGh" data-nav="wd">Withdrawal</button><button type="button" class="vtGh" data-nav="cert">'+L("Sertifikat","Certificate")+'</button></div><button type="button" class="vtGh" id="vtBack" style="margin-top:10px">'+L("Kembali ke dashboard","Back to dashboard")+'</button>'}
+function fuBody(a){
+  var tb=VT.tab;
+  if(tb==="home")return fuHome(a);
+  if(tb==="mkts")return fuMarkets(a);
+  if(tb==="trade")return fuTrade(a);
+  if(tb==="pos")return'<div class="fBot fPage" id="fBot">'+fuBotInner(a)+'</div>';
+  return fuMore(a)}
+/* ---- angka yang berubah tiap detik ---- */
+function fuQty(){var e=$("fQty")||$("fQtyB");return Math.max(1,Math.round(+(e||{}).value||VT.lot||1))}
+function fuLabels(){var q=fuQty(),ot=VT.ot,w=ot==="market"?"Market":ot==="limit"?"Limit":"Stop";document.querySelectorAll("[data-flb]").forEach(function(e){e.textContent=(e.dataset.flb==="buy"?"Buy ":"Sell ")+q+" @ "+w})}
+function fuCalc(){
+  var i=VIX[VT.sym],q=fuQty(),b=VBK[i.id],sl=+($("vtSl")||{}).value||0,tp=+($("vtTp")||{}).value||0,ref=b&&!b.ph?b.mid:0;
+  vtSet('[data-k="fmg"]',vtM(q*i.mg));vtSet('[data-k="ffee"]',vtM(q*i.fee)+" / "+L("sisi","side"));
+  vtSet('[data-k="frisk"]',sl&&ref?"-"+vtM(Math.abs(ref-sl)*i.m*q).replace("-",""):"—");vtSet('[data-k="frew"]',tp&&ref?"+"+vtM(Math.abs(tp-ref)*i.m*q).replace("-",""):"—");
+  fuLabels()}
+function fuPaint(a,s){
+  var lim=s.maxLimit||1,buf=Math.max(0,s.equity-s.floor);
+  vtSet('[data-k="floor"]',vtM(s.floor));vtSet('[data-k="buf"]',vtM(buf));
+  document.querySelectorAll('[data-k="bufb"]').forEach(function(e){e.style.width=Math.max(0,Math.min(100,buf/lim*100))+"%"});
+  vtSet('[data-k="um"]',vtM(s.usedMargin));vtSet('[data-k="fm"]',vtM(s.freeMargin));vtSet('[data-k="ml"]',s.usedMargin>0?(s.equity/s.usedMargin*100).toFixed(0)+"%":"—");
+  document.querySelectorAll("[data-hi]").forEach(function(e){var x=VBK[e.dataset.hi];e.textContent=x&&x.hi>0?vtFmt(e.dataset.hi,x.hi):"—"});
+  document.querySelectorAll("[data-lo]").forEach(function(e){var x=VBK[e.dataset.lo];e.textContent=x&&x.lo>0?vtFmt(e.dataset.lo,x.lo):"—"});
+  document.querySelectorAll("[data-ptk]").forEach(function(e){var p=a.positions[e.dataset.ptk],bb=VBK[e.dataset.ptk];if(!p||!bb||bb.ph)return;var ii=VIX[e.dataset.ptk],px=p.side==="long"?bb.bid:bb.ask,tk=Math.round((p.side==="long"?px-p.entry:p.entry-px)/ii.tick);e.textContent=(tk>0?"+":"")+tk+" ticks"});
+  if(VT.tab==="trade"){var i=VIX[VT.sym],b=VBK[i.id],px=$("fPx");
+    if(px&&!px.value&&document.activeElement!==px&&b&&!b.ph)px.value=vtFmt(i.id,fuRound(i,b.mid));
+    fuCalc()}}
+function fuRefresh(){
+  var a=vtAcc();if(!a||!a.fut||!VT.on)return;
+  if(VT.tab!=="trade"){vtRender();return}
+  var bot=$("fBot");if(bot)bot.innerHTML=fuBotInner(a);var ps=$("fPs");if(ps){ps.innerHTML=fuPs(a);ps.classList.toggle("on",!!a.positions[VT.sym])}
+  vtLsig="";vtSyncLines();vtStopsUI();vtPaint()}
+/* ---- order ---- */
+function fuErr(c,a){
+  if(c==="max_contracts"){var cap=fuCap(a);return L("Melebihi batas kontrak: maks. "+cap+" mini ("+cap*10+" micro) untuk akun ini.","Contract limit exceeded: max "+cap+" mini ("+cap*10+" micro) for this account.")}
+  var m={insufficient_margin:["Margin tidak cukup.","Insufficient margin."],no_price:["Harga belum tersedia.","No price yet."],bad_order:["Order tidak valid.","Invalid order."],bad_stop:["Harga stop harus di atas ask (buy) atau di bawah bid (sell).","Stop price must be above the ask (buy) or below the bid (sell)."],account_breached:["Akun sudah breached.","Account is breached."],account_passed:["Challenge sudah lolos. Trading di akun berikutnya.","Challenge already passed. Trade on the next account."]}[c];
+  return m?L(m[0],m[1]):String(c)}
+function fuOrder(side,ot,q,px0,sl,tp){
+  var a=vtAcc(),i=VIX[VT.sym],b=VBK[i.id];
+  if(!a||a.status!=="active")return vtToast(L("Akun tidak aktif.","Account is not active."),false);
+  if(!vtLive(i.id))return vtToast(L("Pasar tutup atau harga belum tersedia.","Market closed or no price yet."),false);
+  q=Math.round(q);if(!(q>=1&&q<=500))return vtToast(L("Jumlah kontrak minimal 1.","Minimum 1 contract."),false);
+  var buy=side==="buy",mk=ot==="market",px=mk?(buy?b.ask:b.bid):fuRound(i,px0);
+  if(!mk&&!(px>0))return vtToast(L("Isi harga order.","Enter the order price."),false);
+  if(ot==="limit"&&(buy?px>=b.ask:px<=b.bid))return vtToast(buy?L("Buy limit harus di bawah ask.","Buy limit must be below the ask."):L("Sell limit harus di atas bid.","Sell limit must be above the bid."),false);
+  if(ot==="stop"&&(buy?px<=b.ask:px>=b.bid))return vtToast(buy?L("Buy stop harus di atas ask.","Buy stop must be above the ask."):L("Sell stop harus di bawah bid.","Sell stop must be below the bid."),false);
+  if(sl)sl=fuRound(i,sl);if(tp)tp=fuRound(i,tp);
+  if(sl&&(buy?sl>=px:sl<=px))return vtToast(L("Stop Loss di sisi yang salah.","Stop Loss is on the wrong side."),false);
+  if(tp&&(buy?tp<=px:tp>=px))return vtToast(L("Take Profit di sisi yang salah.","Take Profit is on the wrong side."),false);
+  var r=PE.placeOrder(a,{symbol:i.id,side:side,qty:q*i.cs,type:ot,price:mk?0:px,sl:sl||0,tp:tp||0},VBK,fuCfg(a));
+  if(!r.ok)return vtToast(fuErr(r.error,a),false);
+  pSave();pPush(true);
+  var ev=r.events||[],op=ev.filter(function(e){return e.type==="open"})[0],cl=ev.filter(function(e){return e.type==="close"})[0];
+  vtToast(!r.filled?(ot==="stop"?L("Order stop dipasang.","Stop order placed."):L("Order limit dipasang.","Limit order placed.")):op?(side.toUpperCase()+" "+q+" "+i.id+" @ "+vtFmt(i.id,r.price)):cl?(L("Posisi ditutup ","Position closed ")+i.id+" "+vtM2(cl.pnl)):(side.toUpperCase()+" "+q+" "+i.id),true);
+  if(r.filled&&op&&(sl||tp)||(!r.filled)){var e1=$("vtSl"),e2=$("vtTp");if(e1)e1.value="";if(e2)e2.value=""}
+  fuRefresh();return true}
+function fuSubmit(side){if(fuOrder(side,VT.ot,fuQty(),VT.ot==="market"?0:+($("fPx")||{}).value,+($("vtSl")||{}).value||0,+($("vtTp")||{}).value||0))fuTk(false)}
+function fuTk(on){var T=$("fT");if(T)T.classList.toggle("tkOpen",!!on)}
+function fuQuick(side){
+  VT.side=side;
+  if(!VT.inst){fuTk(true);return}
+  var n=Date.now(),a=vtAcc(),p=a&&a.positions[VT.sym],opp=p&&((p.side==="long")!==(side==="buy"));
+  if(n-vtQAt<700)return;vtQAt=n;
+  fuOrder(side,"market",fuQty(),0,opp?0:(+($("vtSl")||{}).value||0),opp?0:(+($("vtTp")||{}).value||0))}
+function fuClose(s){
+  var a=vtAcc(),p=a&&a.positions[s];if(!p)return;
+  if(!vtLive(s))return vtToast(L("Pasar tutup. Posisi belum bisa ditutup.","Market closed. Cannot close the position yet."),false);
+  var r=PE.placeOrder(a,{symbol:s,side:p.side==="long"?"sell":"buy",qty:p.qty,type:"market",reduceOnly:true},VBK,fuCfg(a));
+  if(!r.ok)return vtToast(fuErr(r.error,a),false);
+  var cl=(r.events||[]).filter(function(e){return e.type==="close"})[0];
+  pSave();pPush(true);if(cl)vtToast(L("Posisi ditutup ","Position closed ")+s+" "+vtM2(cl.pnl),cl.pnl>=0);fuRefresh()}
+/* ---- pilih kontrak ---- */
+function fuPick(){
+  var d=document.createElement("div");d.className="vtSheet";d.id="vtPickS";
+  d.innerHTML='<div><b>'+L("Pilih kontrak","Select contract")+'</b>'+FI.map(function(i){return'<button type="button" class="vtMk" data-pk="'+i.id+'">'+fuIcon(i)+'<div><b>'+i.id+'</b><small>'+esc(i.n)+' · $'+fuTv(i)+'/tick</small></div></button>'}).join("")+'</div>';
+  $("vtApp").appendChild(d);d.onclick=function(e){var b=e.target.closest("[data-pk]");if(b){VT.sym=b.dataset.pk;d.remove();vtRender()}else if(e.target===d)d.remove()}}
+/* ---- event ---- */
+function fuSyncQty(v,from){v=Math.max(1,Math.round(+v)||1);VT.lot=v;["fQty","fQtyB"].forEach(function(k){var e=$(k);if(e&&k!==from&&document.activeElement!==e)e.value=v});fuCalc()}
+function fuSetFull(on){
+  FU.full=!!on;var T=$("fT");if(T)T.classList.toggle("full",FU.full);
+  var b=$("fBtnFull");if(b){b.textContent=FU.full?"⤡":"⤢";b.classList.toggle("on",FU.full)}
+  if(window.ResizeObserver===undefined&&vtCh)setTimeout(function(){var q=$("vtCh");if(q&&vtCh)vtCh.applyOptions({width:q.clientWidth,height:q.clientHeight})},50)}
+function fuClick(e){
+  var t=e.target.closest&&e.target.closest("button,[data-fcat]");if(!t)return;var a=vtAcc();if(!a)return;var d=t.dataset;
+  if(d.ft){FU.tab=d.ft;var bot=$("fBot");if(bot)bot.innerHTML=fuBotInner(a);vtPaint();return}
+  if(d.ot){VT.ot=d.ot;var tk=$("fTk");if(tk){tk.innerHTML=fuTicket(a);vtLsig="";vtSyncLines();vtStopsUI();vtPaint()}return}
+  if(d.q){fuSyncQty(fuQty()+(d.q==="+"?1:-1));return}
+  if(d.qq){fuSyncQty(+d.qq);return}
+  if(d.px){var i=VIX[VT.sym],pe=$("fPx");if(pe)pe.value=vtFmt(i.id,fuRound(i,(+pe.value||0)+(d.px==="+"?1:-1)*i.tick));return}
+  if(d.fo){fuSubmit(d.fo);return}
+  if(d.fq){fuQuick(d.fq);return}
+  if(d.finst){
+    VT.inst=!VT.inst;try{localStorage.setItem("vtInst",VT.inst?"1":"0")}catch(x){}
+    document.querySelectorAll(".fInstB").forEach(function(b){b.classList.toggle("on",VT.inst);var k=b.querySelector(".vtSw");if(k)k.classList.toggle("on",VT.inst)});var q=$("fQ");if(q)q.classList.toggle("inst",VT.inst);
+    vtStopsUI();vtToast(VT.inst?L("Instan order aktif.","Instant order on."):L("Instan order mati.","Instant order off."),VT.inst);return}
+  if(d.st){vtAddStop(d.st);return}
+  if(d.rm){vtRmStop(d.rm);return}
+  if(d.fcl){fuClose(d.fcl);return}
+  if(d.tf!==undefined&&t.closest(".fTf")){VT.tf=+d.tf;document.querySelectorAll(".fTf button").forEach(function(b){b.classList.toggle("on",+b.dataset.tf===VT.tf)});if(vtCs)vtLoadBars();return}
+  if(d.fcat){FU.cat=d.fcat;if(VT.tab==="mkts"){vtRender();return}var m=$("fMkL");if(m)m.innerHTML=fuMkRows();var c=$("fCats");if(c)c.innerHTML=fuCats();vtPaint();return}
+  if(t.id==="vtPick"){fuPick();return}
+  if(t.id==="fBtnT"){fuTk(true);return}
+  if(t.id==="fTkX"){fuTk(false);return}
+  if(t.id==="vtCfgB"){vtCfgSheet();return}
+  if(t.id==="fBtnFull"){fuSetFull(!FU.full);return}
+  if(t.id==="fBtnL"){FU.lc=!FU.lc;fuSavePref();var T=$("fT");if(T)T.classList.toggle("lc",FU.lc);return}
+  if(t.id==="fBtnR"){FU.rc=!FU.rc;fuSavePref();var T2=$("fT");if(T2)T2.classList.toggle("rc",FU.rc);return}}
+function fuInput(e){
+  var t=e.target;
+  if(t.id==="fQty"||t.id==="fQtyB"){var v=Math.round(+t.value);if(v>=1){VT.lot=v;fuSyncQty(v,t.id)}return}
+  if(t.id==="vtSl"||t.id==="vtTp"){vtLsig="";vtSyncLines();vtStopsUI();fuCalc();return}
+  if(t.id==="fSrch"){FU.q=t.value;var m=$("fMkL");if(m){m.innerHTML=fuMkRows();vtPaint()}}}
+/* splitter: tarik untuk mengubah tinggi chart di PC (disimpan) */
+function fuBindSplit(){
+  var sp=$("fSplit"),T=$("fT"),box=$("vtCh")&&$("vtCh").parentNode;if(!sp||!T||!box)return;
+  var apply=function(h){var mx=Math.max(240,T.clientHeight-150);h=Math.max(200,Math.min(mx,h));T.style.setProperty("--fh",h+"px");return h};
+  sp.addEventListener("pointerdown",function(e){
+    var y0=e.clientY,h0=box.getBoundingClientRect().height,nh=h0,raf=0;try{sp.setPointerCapture(e.pointerId)}catch(x){}sp.classList.add("on");e.preventDefault();
+    var mv=function(ev){nh=h0+(ev.clientY-y0);if(!raf)raf=requestAnimationFrame(function(){raf=0;nh=apply(nh)})};
+    var up=function(){sp.removeEventListener("pointermove",mv);sp.removeEventListener("pointerup",up);sp.removeEventListener("pointercancel",up);sp.classList.remove("on");if(raf){cancelAnimationFrame(raf);raf=0}FU.fh=Math.round(apply(nh));fuSavePref()};
+    sp.addEventListener("pointermove",mv);sp.addEventListener("pointerup",up);sp.addEventListener("pointercancel",up)});
+  sp.addEventListener("dblclick",function(){FU.fh=0;fuSavePref();T.style.setProperty("--fh",fuFh()+"px")});
+  sp.addEventListener("keydown",function(e){if(e.key!=="ArrowUp"&&e.key!=="ArrowDown")return;e.preventDefault();FU.fh=Math.round(apply(box.getBoundingClientRect().height+(e.key==="ArrowDown"?24:-24)));fuSavePref()})}
+function fuBind(a){
+  var B=$("vtBd");if(B){B.onclick=fuClick;B.oninput=fuInput}
+  var bd=$("fTkBd");if(bd)bd.onclick=function(){fuTk(false)};
+  if(VT.tab==="trade"){fuBindSplit();var fb=$("fBtnFull");if(fb&&FU.full)fb.textContent="⤡";vtStopsUI()}}
+document.addEventListener("keydown",function(e){if(e.key==="Escape"&&FU.full&&VT.on){fuSetFull(false)}});
+var FUCSS=[
+"#vtApp.fut{--ac:#3B82F6;--ac2:#60A5FA}",
+"#vtApp.fut .vtBtn,#vtApp.fut .vtTabs button.on,#vtApp.fut .vtBS .fGo{color:#fff}",
+"#vtApp.fut .vtBS .fGo{background:var(--ac)}#vtApp.fut .vtGh{color:var(--ac2);border-color:var(--ac)}#vtApp.fut .vtHd b{color:var(--ac2)}#vtApp.fut .vtCh button.on,#vtApp.fut .vtTfR button.on{border-color:var(--ac);color:var(--ac2)}",
+".fuTag{font-size:10px;font-weight:700;letter-spacing:.12em;padding:2px 8px;border-radius:99px;background:rgba(59,130,246,.16);color:#60A5FA;border:1px solid rgba(59,130,246,.45)}",
+/* HP: chart memenuhi layar (tanpa margin), tiket order jadi sheet */
+".vtBd.fuT{padding:0;max-width:none;display:flex;flex-direction:column;overflow:hidden}.fT{display:flex;flex-direction:column;flex:1;min-height:0;font-variant-numeric:tabular-nums}",
+".fMk{display:none}.fMain{display:contents}",
+".fHd{order:1;display:flex;align-items:center;gap:4px 8px;padding:6px 10px 2px;flex-wrap:wrap}.fHn{display:flex;flex-direction:column;min-width:0}.fHn small{display:none}.fSymB{background:none;border:0;padding:0;font-size:16px;text-align:left}.fSymB b{font-size:16px}",
+".fPx{display:flex;align-items:baseline;gap:6px}.fPx b{font-size:19px;font-weight:700}.fPx span{font-size:12px;font-weight:600}.fHL{display:none}",
+".fHd .vtIc,.fHd .vtTag{display:none}.fAct{margin-left:auto;display:flex;gap:6px;align-items:center}.fIb{min-width:34px;height:32px;border:1px solid var(--ln);background:#0d0f13;border-radius:9px;font-size:15px;line-height:1;padding:0 8px;color:var(--mu)}.fIb.on{border-color:var(--ac);color:var(--ac2)}.fOrdB{font-size:12px;font-weight:700;color:var(--ac2);border-color:var(--ac)}#fBtnL,#fBtnR{display:none}",
+".fTf{order:2;margin:0 10px 4px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.fTf button{flex:none}",
+".fPs>*{white-space:nowrap}.fPs{order:3;display:none;align-items:center;gap:8px;padding:5px 10px;background:#0d0f13;border-top:1px solid var(--ln);font-size:13px}.fPs.on{display:flex}.fPs small{color:var(--mu)}.fPsP{font-weight:700}",
+".fChw{order:4;position:relative;flex:1;min-height:0;margin:0;border-top:1px solid var(--ln)}.fChw #vtCh{position:absolute;inset:0}",
+".fSplit{display:none}",
+".fSt{order:5;padding:4px 10px 0;flex:none}.fSt .vtStops{margin:0;min-height:0}.fSt .vtHint,.fNote{display:none}.fSt .vtStops:empty{display:none}",
+".fBot{display:none}.fBot.fPage{display:block;order:0;padding:12px;overflow:auto;flex:1}",
+".fTk{position:fixed;left:0;right:0;bottom:0;z-index:340;max-height:88%;overflow:auto;background:#0f1116;border-top:1px solid var(--ln);border-radius:18px 18px 0 0;padding:12px 14px calc(14px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .18s ease;visibility:hidden}",
+".fT.tkOpen .fTk{transform:none;visibility:visible}.fTkBd{position:fixed;inset:0;z-index:335;background:rgba(0,0,0,.55);display:none}.fT.tkOpen .fTkBd{display:block}",
+".fTkH{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}",
+".fAcc{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px}.fAcc div{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:7px 8px;min-width:0}.fAcc small{display:block;color:var(--mu);font-size:10px}.fAcc b{font-size:12px;font-weight:700;white-space:nowrap}",
+".fBS{display:flex;gap:10px;margin-top:12px}.fBS button,.fQ>button{flex:1;border:0;border-radius:12px;padding:8px 4px;font-weight:700;font-size:16px;min-height:52px}.fBS small,.fQ>button small{display:block;font-weight:600;font-size:13px;opacity:.9;font-variant-numeric:tabular-nums}",
+".fBuy{background:#22C55E;color:#06140D}.fSell{background:#F04452;color:#fff}.fBS button:disabled,.fQ>button:disabled{opacity:.4}",
+".fInstB{margin-top:12px}.fCalc{margin-top:8px}.fCalc .vtRow{padding:4px 0;font-size:13px}",
+".fQ{order:7;position:relative;flex:none;z-index:3;display:flex;gap:8px;padding:8px 10px;background:#080A0D;border-top:1px solid var(--ln);align-items:stretch}.fQ.inst{border-top-color:var(--ac)}",
+".fQm{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:112px}.fQm>div{display:flex;align-items:center;gap:4px}.fQm>div button{width:32px;height:32px;border:1px solid var(--ln);background:#0d0f13;border-radius:9px;font-size:18px;line-height:1;padding:0}.fQm input{width:52px;text-align:center;padding:6px 2px;border-radius:9px}",
+".fQ.inst .fQm .fInstB{color:var(--ac2)}.fQm .fInstB{margin:0}",
+".fBt{margin:6px 0}.fPane{min-height:60px}.fEmpty{color:var(--mu);padding:14px 4px;margin:0}.fAll{margin-top:10px}.fAccG .vtRow{border-bottom:1px solid #15171c}",
+".fRowP{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;padding:10px 2px;border-bottom:1px solid #15171c}.fRc1{display:flex;align-items:center;gap:8px;flex:1 1 130px}.fRc1 small{color:var(--mu)}.fSd{font-size:10px;font-weight:700;letter-spacing:.06em}",
+".fRc2,.fRc3{display:flex;flex-direction:column;min-width:70px}.fRc2 small,.fRc3 small{color:var(--mu);font-size:11px}.fRc3{text-align:right;margin-left:auto}.fRc4{display:flex;gap:6px}.fBtn{border:1px solid var(--ln);background:#0d0f13;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600}.fBtn.x{border-color:var(--ac);color:var(--ac2)}",
+".fMkH{display:flex;flex-direction:column;margin-bottom:8px}.fMkH small{color:var(--mu);font-size:11px}.fRow{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;border-bottom:1px solid #15171c;padding:9px 6px;text-align:left}.fRow.on{background:rgba(59,130,246,.12)}.fRow div{flex:1;min-width:0}.fRow small{display:block;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}.fRp{text-align:right}.fRp small{font-size:11px}",
+".fBuf i{background:var(--ac)}#vtApp.fut .vtBar i{background:var(--ac)}",
+"@media(min-width:900px){",
+".fHd .vtIc{display:inline-flex}.fHd .vtTag{display:inline-block}.fT{display:grid;grid-template-columns:250px minmax(0,1fr) 330px;grid-template-rows:minmax(0,1fr)}",
+".fT.lc{grid-template-columns:0 minmax(0,1fr) 330px}.fT.rc{grid-template-columns:250px minmax(0,1fr) 0}.fT.lc.rc{grid-template-columns:0 minmax(0,1fr) 0}",
+".fMk{display:block;grid-column:1;overflow:auto;border-right:1px solid var(--ln);padding:12px;min-width:0}.fT.lc .fMk{display:none}",
+".fMain{display:flex;flex-direction:column;grid-column:2;min-width:0;min-height:0}",
+".fHd,.fTf,.fPs,.fChw,.fSt,.fBot,.fTk,.fQ{order:0}.fHd{padding:10px 12px 4px;gap:8px 14px}.fHn small{display:block}.fPx b{font-size:24px}.fHL{display:flex;gap:10px;color:var(--mu);font-size:11px}.fHL b{color:#F5F5F5;font-weight:600}.fTf{margin:2px 12px 6px}",
+".fHd,.fTf,.fPs,.fSt{flex:none}.fChw{flex:none;height:var(--fh);min-height:200px}",
+".fSplit{display:flex;flex:none;height:12px;align-items:center;justify-content:center;cursor:row-resize;touch-action:none;margin:-6px 0 -6px;position:relative;z-index:3}.fSplit i{width:56px;height:4px;border-radius:99px;background:var(--ln);transition:background .15s}.fSplit:hover i,.fSplit.on i,.fSplit:focus-visible i{background:var(--ac)}",
+".fSt{padding:10px 12px 0}.fSt .vtHint,.fNote{display:block}.fSt .vtStops:empty{display:block}",
+".fBot{display:block;flex:1;min-height:90px;overflow:auto;padding:4px 12px 12px}",
+".fTk{position:static;grid-column:3;transform:none;visibility:visible;border-radius:0;border:0;border-left:1px solid var(--ln);max-height:none;background:none;overflow:auto;padding:12px;z-index:auto}.fT.rc .fTk{display:none}.fTkH,.fTkBd,.fOrdB{display:none!important}",
+"#fBtnL,#fBtnR{display:inline-block}.fQ{display:none}",
+".vtBd.fuT .fPage{padding:12px}",
+"}",
+".fT.full{position:fixed;inset:0;z-index:320;display:flex;flex-direction:column;height:auto;background:#080A0D;padding-top:env(safe-area-inset-top)}",
+".fT.full .fMain{display:contents}.fT.full .fMk,.fT.full .fBot,.fT.full .fSplit,.fT.full .fSt .vtHint{display:none}.fT.full .fTk{display:block;position:fixed;grid-column:auto}",
+".fT.full .fChw{flex:1;height:auto;min-height:0}.fT.full .fQ{display:flex}.fT.full #fBtnL,.fT.full #fBtnR{display:none}.fT.full .fOrdB{display:inline-block!important}.fT.full .fTk{transform:translateY(105%);visibility:hidden;border:0;border-radius:18px 18px 0 0;background:#0f1116}.fT.full.tkOpen .fTk{transform:none;visibility:visible}.fT.full .fTkH,.fT.full.tkOpen .fTkBd{display:flex}.fT.full .fTkBd{display:none}.fT.full.tkOpen .fTkBd{display:block}"
+].join("");
+function fuCss(){if($("fuCss"))return;var s=document.createElement("style");s.id="fuCss";s.textContent=FUCSS;document.head.appendChild(s)}
+
+function vtRows(fl){
+  return (fl||vtList)().map(function(a){if((a.status!=="active")!==(accTab==="inactive"))return"";
     var eq;try{eq=vtSnap(a).equity}catch(e){eq=a.balance}var pf=eq-a.size,r=a.status==="breached"?'<div class="acc-r"><strong class="dn">'+t("breached")+'</strong><small>Equity '+money(eq)+'</small></div>':a.status==="passed"?'<div class="acc-r"><strong class="up">'+L("Lolos","Passed")+'</strong><small>Equity '+money(eq)+'</small></div>':'<div class="acc-r"><strong class="'+(pf>0?"up":pf<0?"dn":"")+'">'+(pf<0?"-":pf>0?"+":"")+money(Math.abs(pf))+'</strong><small>Equity '+money(eq)+'</small></div>';
-    return'<button type="button" class="acc accv" data-vt="'+esc(a.id)+'"><div><b>'+esc(a.program)+" "+kfmt(a.size)+(a.isFunded?" · Funded":"")+'</b><small>Vekxt Trader | '+(a.phase?t("phase")+" "+a.phase+"/"+a.phases+" | ":"")+'ID '+esc(a.id)+'</small></div>'+r+'<span class="acc-a">&#8250;</span></button>'}).join("")}
+    return'<button type="button" class="acc accv" data-vt="'+esc(a.id)+'"><div><b>'+esc(a.program)+" "+kfmt(a.size)+(a.isFunded?" · Funded":"")+'</b><small>'+(a.fut?'Vekxt Futures':'Vekxt Trader')+' | '+(a.phase?t("phase")+" "+a.phase+"/"+a.phases+" | ":"")+'ID '+esc(a.id)+'</small></div>'+r+'<span class="acc-a">&#8250;</span></button>'}).join("")}
 
 function dashHome(){
   var a=curAcc(),home=$("lgHome").href,x=a?"":modeSw();x+=(ACC_API&&accState==="ok")?syncBar():"";
   if(CFG&&user&&!user.verified)return'<div class="lg-card"><b>'+t("verT")+'</b><p>'+t("verMsg")+'</p><div class="lg-msg" id="verMsg" role="alert"></div><button class="lg-btn" type="button" id="verDone">'+t("verDone")+'</button><button class="lg-link" type="button" id="verResend">'+t("verResend")+'</button></div>';
   if(PM==="perp")return perpHome();
+  if(PM==="fut")return futHome();
   vtBoot();
   if(selV!==null){var va=vtById(selV);if(va)return x+vtDetail(va);selV=null}
   if(a)return x+accDetail(a);
@@ -1813,7 +2137,7 @@ function lbReportMaybe(){
   if(Date.now()-last<1800000)return;
   pLoadAll();if(pFsState==="idle"){vtBoot();return}
   if(pFsState!=="ok")return;
-  var acc=[];PERPS.forEach(function(a){if(a.status!=="active")return;acc.push({p:a.program,s:a.size,pct:(a.balance+(a.wdTot||0)-a.size)/a.size*100,k:a.vt?"vt":"perp",f:a.isFunded?1:0})});
+  var acc=[];PERPS.forEach(function(a){if(a.status!=="active"||a.demo)return;acc.push({p:a.program,s:a.size,pct:(a.balance+(a.wdTot||0)-a.size)/a.size*100,k:a.vt?"vt":"perp",f:a.isFunded?1:0})});
   try{localStorage.setItem(k,String(Date.now()))}catch(e){}
   apiPost({action:"lb_report",accounts:acc,profile:{n:user.name,c:(prof&&prof.country)||""}},function(){},function(){try{localStorage.removeItem(k)}catch(e){}})}
 function dash(){
