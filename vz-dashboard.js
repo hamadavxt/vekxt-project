@@ -1326,7 +1326,7 @@ function vtBindDrag(el){
     if(vtTap){var t=vtTap;vtTap=null;if(Date.now()-t.t<600&&Math.hypot(e.clientX-t.x,e.clientY-t.y)<10)vtStopsFromEntry()}};
   el.addEventListener("pointerup",end,true);el.addEventListener("pointercancel",end,true)}
 /* ---- UI ---- */
-function vtToast(m,ok){var e=$("vtToast");if(!e){if(!VT.on){try{var d=document.createElement("div");d.className="vtToast "+(ok?"ok":"no");d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},5000)}catch(x){}}return}
+function vtToast(m,ok){if(ok===false)vtSnd("err");var e=$("vtToast");if(!e){if(!VT.on){try{var d=document.createElement("div");d.className="vtToast "+(ok?"ok":"no");d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},5000)}catch(x){}}return}
   e.textContent=m;e.className="vtToast on "+(ok?"ok":"no");clearTimeout(vtToastT);vtToastT=setTimeout(function(){e.className="vtToast"},4200)}
 function vtPaintNote(m){var e=$("vtNote");if(e)e.textContent=m}
 function vtOpen(id){
@@ -1380,7 +1380,7 @@ function vtBody(a){
   if(tb==="pos")return vtPosHtml(a);
   return vtMoreHtml(a)}
 /* ---- pengaturan chart (disimpan di browser) ---- */
-var VCC_D={gv:true,gh:true,ga:0.5,up:"#22C55E",dn:"#F04452",hollow:false,border:false,pline:true,mag:false,bg:"d"};
+var VCC_D={gv:true,gh:true,ga:0.5,up:"#22C55E",dn:"#F04452",hollow:false,border:false,pline:true,mag:false,snd:true,bg:"d"};
 var VCC_PRE=[["Classic","#22C55E","#F04452"],["Biru / Oranye","#3B82F6","#F59E0B"],["Mono","#E5E7EB","#6B7280"],["Emas","#F5B84B","#8B5CF6"]];
 var VCC_BG={d:"transparent",k:"#000000",b:"#0b1220",g:"#111318"},vtView={},vtCache={};
 function vtCfg(){var c={};try{c=JSON.parse(localStorage.getItem("vtChartCfg")||"{}")||{}}catch(e){}var o={};for(var k in VCC_D)o[k]=(k in c)?c[k]:VCC_D[k];return o}
@@ -1399,7 +1399,7 @@ function vtCfgSheet(){
   +'<div class="vtCfgRow"><span>'+L("Warna candle naik","Up candle color")+'</span><input type="color" id="ccUp" value="'+c.up+'"></div><div class="vtCfgRow"><span>'+L("Warna candle turun","Down candle color")+'</span><input type="color" id="ccDn" value="'+c.dn+'"></div>'
   +sw("hollow",L("Candle naik kosong","Hollow up candles"))+sw("border",L("Garis tepi candle","Candle border"))+sw("gv",L("Grid vertikal","Vertical grid"))+sw("gh",L("Grid horizontal","Horizontal grid"))
   +'<div class="vtCfgRow"><span>'+L("Intensitas grid","Grid intensity")+'</span><input type="range" id="ccGa" min="0" max="1" step="0.05" value="'+c.ga+'" style="width:140px"></div>'
-  +sw("pline",L("Garis harga terakhir","Last price line"))+sw("mag",L("Crosshair magnet","Magnet crosshair"))
+  +sw("pline",L("Garis harga terakhir","Last price line"))+sw("mag",L("Crosshair magnet","Magnet crosshair"))+sw("snd",L("Suara order","Order sound"))
   +'<span class="vtLb">'+L("Latar chart","Chart background")+'</span><div class="vtPre">'+[["d",L("Gelap","Dark")],["k",L("Hitam","Black")],["b",L("Biru gelap","Navy")],["g",L("Abu","Gray")]].map(function(x){return'<button type="button" data-cb="'+x[0]+'" class="'+(c.bg===x[0]?"vtSel":"")+'">'+x[1]+'</button>'}).join("")+'</div>'
   +'<div class="vtBS"><button type="button" class="vtGh" id="ccReset">Reset</button><button type="button" class="vtBtn" id="ccX">'+L("Selesai","Done")+'</button></div></div>';
   $("vtApp").appendChild(d);
@@ -1495,6 +1495,7 @@ function vtOrder(side,ot,lots,px0,sl,tp){
   if(!r.ok)return vtToast(L(VERR[r.error]?VERR[r.error][0]:r.error,VERR[r.error]?VERR[r.error][1]:r.error),false);
   pSave();pPush(true);
   var ev=r.events||[],op=ev.filter(function(e){return e.type==="open"})[0],cl=ev.filter(function(e){return e.type==="close"})[0];
+  vtSnd(cl?(cl.pnl>=0?"win":"loss"):"fill");
   vtToast(!r.filled?L("Order limit dipasang.","Limit order placed."):op?(side.toUpperCase()+" "+lots+" "+i.id+" @ "+vtFmt(i.id,r.price)):cl?(L("Posisi ditutup ","Position closed ")+i.id+" "+vtM2(cl.pnl)):(side.toUpperCase()+" "+lots+" "+i.id),true);
   if(r.filled&&op&&(sl||tp)){var e1=$("vtSl"),e2=$("vtTp");if(e1)e1.value="";if(e2)e2.value=""}
   vtPosLines();vtStopsUI();return true}
@@ -1545,7 +1546,7 @@ function vtBind(a){
   var st=$("vtStar");if(st)st.onclick=function(){var f=vtFav(),k=f.indexOf(VT.sym);if(k>-1)f.splice(k,1);else f.push(VT.sym);vtFavSet(f);vtRender()};
   $("vtPick").onclick=vtPickHtml;
   A.querySelectorAll("[data-tf]").forEach(function(b){b.onclick=function(){VT.tf=+b.dataset.tf;vtRender()}});
-  A.querySelectorAll("[data-bs]").forEach(function(b){b.onclick=function(){var s=b.dataset.bs;if(VT.inst){vtQuick(s);return}
+  A.querySelectorAll("[data-bs]").forEach(function(b){b.onclick=function(){var s=b.dataset.bs;vtSnd("click");if(VT.inst){vtQuick(s);return}
     VT.side=s;vtOrdSheet()}});
   A.querySelectorAll("[data-ot]").forEach(function(b){b.onclick=function(){VT.ot=b.dataset.ot;vtRender()}});
   A.querySelectorAll("[data-lq]").forEach(function(b){b.onclick=function(){vtSetLot(+b.dataset.lq)}});
@@ -1580,6 +1581,12 @@ try{var _fp=JSON.parse(localStorage.getItem("fuPref")||"{}");FU.fh=+_fp.fh||0;FU
 function fuSavePref(){try{localStorage.setItem("fuPref",JSON.stringify({fh:FU.fh,lc:FU.lc,rc:FU.rc}))}catch(e){}}
 function fuFh(){return FU.fh>0?FU.fh:Math.round(Math.max(240,(window.innerHeight-150)*0.45))}
 function fuCfg(a){if(!a||!a.fut)return VCFG;var c=FCFGS[a.size];if(!c){c=Object.assign({},FCFG,{capU:FCAP[a.size]||Math.max(1,a.size/10000)});FCFGS[a.size]=c}return c}
+/* suara order (Web Audio, tanpa file). Diatur lewat Pengaturan chart > Suara order */
+var SND_C=null;
+function vtSnd(k){
+  try{if(vtCfg().snd===false)return;var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;if(!SND_C)SND_C=new AC();if(SND_C.state==="suspended")SND_C.resume();
+    var T={click:[[1500,.025,"square",.05]],fill:[[880,.07,"sine",.18],[1320,.12,"sine",.18]],win:[[784,.08,"sine",.18],[988,.08,"sine",.18],[1319,.16,"sine",.18]],loss:[[392,.1,"triangle",.2],[262,.18,"triangle",.2]],err:[[220,.16,"sawtooth",.1]]}[k];if(!T)return;
+    var t=SND_C.currentTime;T.forEach(function(n){var o=SND_C.createOscillator(),g=SND_C.createGain();o.type=n[2];o.frequency.value=n[0];g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(n[3],t+.005);g.gain.exponentialRampToValueAtTime(0.0001,t+n[1]);o.connect(g);g.connect(SND_C.destination);o.start(t);o.stop(t+n[1]+.02);t+=n[1]*0.9})}catch(e){}}
 function fuFix(a){if(a.fut&&!FIX[VT.sym]){VT.sym="MNQ";VT.lot=1}else if(!a.fut&&FIX[VT.sym]){VT.sym="XAUUSD";VT.lot=0.1}if(a.fut)VT.lot=Math.max(1,Math.round(VT.lot)||1)}
 function fuTick(a){vtPaint()}
 function fuPs(a){
@@ -1633,10 +1640,10 @@ function fuTicket(a){
   +'<span class="vtLb">Take Profit (TP)</span><input id="vtTp" inputmode="decimal" placeholder="—"><span class="vtLb">Stop Loss (SL)</span><input id="vtSl" inputmode="decimal" placeholder="—">'
   +'<div class="fCalc" id="fCalc"><div class="vtRow"><span>Margin</span><b data-k="fmg">&mdash;</b></div><div class="vtRow"><span>'+L("Komisi","Commission")+'</span><b data-k="ffee">&mdash;</b></div><div class="vtRow"><span>'+L("Risiko ke SL","Risk to SL")+'</span><b data-k="frisk">&mdash;</b></div><div class="vtRow"><span>'+L("Target TP","Reward to TP")+'</span><b data-k="frew">&mdash;</b></div><div class="vtRow"><span>'+L("Nilai per tick","Tick value")+'</span><b>$'+fuTv(i)+'</b></div><div class="vtRow"><span>'+L("Batas kontrak","Contract limit")+'</span><b>'+cap+' mini / '+cap*10+' micro</b></div></div>'
   +'<div class="fBS"><button type="button" class="fSell" data-fo="sell"'+(on?"":" disabled")+'><span data-flb="sell">Sell</span><small data-bid="'+i.id+'">&mdash;</small></button><button type="button" class="fBuy" data-fo="buy"'+(on?"":" disabled")+'><span data-flb="buy">Buy</span><small data-ask="'+i.id+'">&mdash;</small></button></div>'
-  +'<button type="button" class="vtInstB fInstB'+(VT.inst?" on":"")+'" data-finst="1"><span class="vtSw'+(VT.inst?" on":"")+'"></span>⚡ '+L("Instan order (satu ketukan di bar bawah)","Instant order (one tap on the quick bar)")+'</button>'}
+  +'<button type="button" class="vtInstB fInstB'+(VT.inst?" on":"")+'" data-finst="1"><span class="vtSw'+(VT.inst?" on":"")+'"></span>'+L("Instan order (satu ketukan di bar bawah)","Instant order (one tap on the quick bar)")+'</button>'}
 function fuQuickBar(a,i){
   var q=Math.max(1,Math.round(VT.lot)||1),on=a.status==="active";
-  return'<div class="fQ'+(VT.inst?" inst":"")+'" id="fQ"><button type="button" class="fSell" data-fq="sell"'+(on?"":" disabled")+'><span>SELL</span><small data-bid="'+i.id+'">&mdash;</small></button><div class="fQm"><div><button type="button" data-q="-">−</button><input id="fQtyB" inputmode="numeric" value="'+q+'"><button type="button" data-q="+">+</button></div><button type="button" class="vtInstB fInstB'+(VT.inst?" on":"")+'" data-finst="1"><span class="vtSw'+(VT.inst?" on":"")+'"></span>⚡ '+L("Instan","Instant")+'</button></div><button type="button" class="fBuy" data-fq="buy"'+(on?"":" disabled")+'><span>BUY</span><small data-ask="'+i.id+'">&mdash;</small></button></div>'}
+  return'<div class="fQ'+(VT.inst?" inst":"")+'" id="fQ"><button type="button" class="fSell" data-fq="sell"'+(on?"":" disabled")+'><span>SELL</span><small data-bid="'+i.id+'">&mdash;</small></button><div class="fQm"><div><button type="button" data-q="-">−</button><input id="fQtyB" inputmode="numeric" value="'+q+'"><button type="button" data-q="+">+</button></div><button type="button" class="vtInstB fInstB'+(VT.inst?" on":"")+'" data-finst="1"><span class="vtSw'+(VT.inst?" on":"")+'"></span>'+L("Instan","Instant")+'</button></div><button type="button" class="fBuy" data-fq="buy"'+(on?"":" disabled")+'><span>BUY</span><small data-ask="'+i.id+'">&mdash;</small></button></div>'}
 function fuPosRow(a,s){
   var p=a.positions[s],i=VIX[s],long=p.side==="long",q=Math.round(p.qty/i.cs);
   return'<div class="fRowP"><div class="fRc1"><span class="fSd '+(long?"up":"dn")+'">'+(long?"LONG":"SHORT")+'</span><b>'+s+'</b><small>'+q+' ct</small></div>'
@@ -1735,6 +1742,7 @@ function fuOrder(side,ot,q,px0,sl,tp){
   if(!r.ok)return vtToast(fuErr(r.error,a),false);
   pSave();pPush(true);
   var ev=r.events||[],op=ev.filter(function(e){return e.type==="open"})[0],cl=ev.filter(function(e){return e.type==="close"})[0];
+  vtSnd(cl?(cl.pnl>=0?"win":"loss"):"fill");
   vtToast(!r.filled?(ot==="stop"?L("Order stop dipasang.","Stop order placed."):L("Order limit dipasang.","Limit order placed.")):op?(side.toUpperCase()+" "+q+" "+i.id+" @ "+vtFmt(i.id,r.price)):cl?(L("Posisi ditutup ","Position closed ")+i.id+" "+vtM2(cl.pnl)):(side.toUpperCase()+" "+q+" "+i.id),true);
   if(r.filled&&op&&(sl||tp)||(!r.filled)){var e1=$("vtSl"),e2=$("vtTp");if(e1)e1.value="";if(e2)e2.value=""}
   fuRefresh();return true}
@@ -1752,7 +1760,7 @@ function fuClose(s){
   var r=PE.placeOrder(a,{symbol:s,side:p.side==="long"?"sell":"buy",qty:p.qty,type:"market",reduceOnly:true},VBK,fuCfg(a));
   if(!r.ok)return vtToast(fuErr(r.error,a),false);
   var cl=(r.events||[]).filter(function(e){return e.type==="close"})[0];
-  pSave();pPush(true);if(cl)vtToast(L("Posisi ditutup ","Position closed ")+s+" "+vtM2(cl.pnl),cl.pnl>=0);fuRefresh()}
+  pSave();pPush(true);if(cl){vtSnd(cl.pnl>=0?"win":"loss");vtToast(L("Posisi ditutup ","Position closed ")+s+" "+vtM2(cl.pnl),cl.pnl>=0)}fuRefresh()}
 /* ---- pilih kontrak ---- */
 function fuPick(){
   var d=document.createElement("div");d.className="vtSheet";d.id="vtPickS";
@@ -1771,8 +1779,8 @@ function fuClick(e){
   if(d.q){fuSyncQty(fuQty()+(d.q==="+"?1:-1));return}
   if(d.qq){fuSyncQty(+d.qq);return}
   if(d.px){var i=VIX[VT.sym],pe=$("fPx");if(pe)pe.value=vtFmt(i.id,fuRound(i,(+pe.value||0)+(d.px==="+"?1:-1)*i.tick));return}
-  if(d.fo){fuSubmit(d.fo);return}
-  if(d.fq){fuQuick(d.fq);return}
+  if(d.fo){vtSnd("click");fuSubmit(d.fo);return}
+  if(d.fq){vtSnd("click");fuQuick(d.fq);return}
   if(d.finst){
     VT.inst=!VT.inst;try{localStorage.setItem("vtInst",VT.inst?"1":"0")}catch(x){}
     document.querySelectorAll(".fInstB").forEach(function(b){b.classList.toggle("on",VT.inst);var k=b.querySelector(".vtSw");if(k)k.classList.toggle("on",VT.inst)});var q=$("fQ");if(q)q.classList.toggle("inst",VT.inst);
@@ -1821,7 +1829,8 @@ var FUCSS=[
 ".fHd{order:1;display:flex;align-items:center;gap:4px 8px;padding:6px 10px 2px;flex-wrap:wrap}.fHn{display:flex;flex-direction:column;min-width:0}.fHn small{display:none}.fSymB{background:none;border:0;padding:0;font-size:16px;text-align:left}.fSymB b{font-size:16px}",
 ".fPx{display:flex;align-items:baseline;gap:6px}.fPx b{font-size:19px;font-weight:700}.fPx span{font-size:12px;font-weight:600}.fHL{display:none}",
 ".fHd .vtIc,.fHd .vtTag{display:none}.fAct{margin-left:auto;display:flex;gap:6px;align-items:center}.fIb{min-width:34px;height:32px;border:1px solid var(--ln);background:#0d0f13;border-radius:9px;font-size:15px;line-height:1;padding:0 8px;color:var(--mu)}.fIb.on{border-color:var(--ac);color:var(--ac2)}.fOrdB{font-size:12px;font-weight:700;color:var(--ac2);border-color:var(--ac)}#fBtnL,#fBtnR{display:none}",
-".fTf{order:2;margin:0 10px 4px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.fTf button{flex:none}",
+"#vtApp.fut .vtHd b{white-space:nowrap;letter-spacing:.08em;font-size:14px}#vtApp.fut .vtHd small{font-size:11px;line-height:1.25}.fHd{flex-wrap:nowrap}.fAct{gap:4px}@media(max-width:400px){.fPx b{font-size:16px}.fPx span{font-size:11px}.fIb{min-width:30px;padding:0 6px}}",
+"#vtApp .fTf{flex-wrap:nowrap}.fTf{order:2;margin:0 10px 4px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.fTf button{flex:none}",
 ".fPs>*{white-space:nowrap}.fPs{order:3;display:none;align-items:center;gap:8px;padding:5px 10px;background:#0d0f13;border-top:1px solid var(--ln);font-size:13px}.fPs.on{display:flex}.fPs small{color:var(--mu)}.fPsP{font-weight:700}",
 ".fChw{order:4;position:relative;flex:1;min-height:0;margin:0;border-top:1px solid var(--ln)}.fChw #vtCh{position:absolute;inset:0}",
 ".fSplit{display:none}",
@@ -1831,11 +1840,11 @@ var FUCSS=[
 ".fT.tkOpen .fTk{transform:none;visibility:visible}.fTkBd{position:fixed;inset:0;z-index:335;background:rgba(0,0,0,.55);display:none}.fT.tkOpen .fTkBd{display:block}",
 ".fTkH{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}",
 ".fAcc{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px}.fAcc div{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:7px 8px;min-width:0}.fAcc small{display:block;color:var(--mu);font-size:10px}.fAcc b{font-size:12px;font-weight:700;white-space:nowrap}",
-".fBS{display:flex;gap:10px;margin-top:12px}.fBS button,.fQ>button{flex:1;border:0;border-radius:12px;padding:8px 4px;font-weight:700;font-size:16px;min-height:52px}.fBS small,.fQ>button small{display:block;font-weight:600;font-size:13px;opacity:.9;font-variant-numeric:tabular-nums}",
+".fBS{display:flex;gap:10px;margin-top:12px}.fBS button,.fQ>button{flex:1;border:0;border-radius:12px;padding:8px 4px;font-weight:700;font-size:16px;min-height:52px}.fBS small,.fQ>button small{display:block;font-weight:600;font-size:12px;opacity:.9;font-variant-numeric:tabular-nums}",
 ".fBuy{background:#22C55E;color:#06140D}.fSell{background:#F04452;color:#fff}.fBS button:disabled,.fQ>button:disabled{opacity:.4}",
 ".fInstB{margin-top:12px}.fCalc{margin-top:8px}.fCalc .vtRow{padding:4px 0;font-size:13px}",
 ".fQ{order:7;position:relative;flex:none;z-index:3;display:flex;gap:8px;padding:8px 10px;background:#080A0D;border-top:1px solid var(--ln);align-items:stretch}.fQ.inst{border-top-color:var(--ac)}",
-".fQm{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:112px}.fQm>div{display:flex;align-items:center;gap:4px}.fQm>div button{width:32px;height:32px;border:1px solid var(--ln);background:#0d0f13;border-radius:9px;font-size:18px;line-height:1;padding:0}.fQm input{width:52px;text-align:center;padding:6px 2px;border-radius:9px}",
+".fQm{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;flex:none;width:108px}.fQm>div{display:flex;align-items:center;gap:4px}.fQm>div button{width:32px;height:32px;border:1px solid var(--ln);background:#0d0f13;border-radius:9px;font-size:18px;line-height:1;padding:0}#vtApp .fQm input{width:44px;min-width:0;text-align:center;padding:6px 2px;border-radius:9px;flex:none}.fQm>div button{flex:none}.fQ>button{min-width:0;white-space:nowrap}.fQ>button span{display:block;font-size:15px}.fQ>button small{font-size:12px;white-space:nowrap}.fQm .fInstB{font-size:12px;white-space:nowrap}",
 ".fQ.inst .fQm .fInstB{color:var(--ac2)}.fQm .fInstB{margin:0}",
 ".fBt{margin:6px 0}.fPane{min-height:60px}.fEmpty{color:var(--mu);padding:14px 4px;margin:0}.fAll{margin-top:10px}.fAccG .vtRow{border-bottom:1px solid #15171c}",
 ".fRowP{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;padding:10px 2px;border-bottom:1px solid #15171c}.fRc1{display:flex;align-items:center;gap:8px;flex:1 1 130px}.fRc1 small{color:var(--mu)}.fSd{font-size:10px;font-weight:700;letter-spacing:.06em}",
@@ -1848,7 +1857,7 @@ var FUCSS=[
 ".fMk{display:block;grid-column:1;overflow:auto;border-right:1px solid var(--ln);padding:12px;min-width:0}.fT.lc .fMk{display:none}",
 ".fMain{display:flex;flex-direction:column;grid-column:2;min-width:0;min-height:0}",
 ".fHd,.fTf,.fPs,.fChw,.fSt,.fBot,.fTk,.fQ{order:0}.fHd{padding:10px 12px 4px;gap:8px 14px}.fHn small{display:block}.fPx b{font-size:24px}.fHL{display:flex;gap:10px;color:var(--mu);font-size:11px}.fHL b{color:#F5F5F5;font-weight:600}.fTf{margin:2px 12px 6px}",
-".fHd,.fTf,.fPs,.fSt{flex:none}.fChw{flex:none;height:var(--fh);min-height:200px}",
+".fHd{flex-wrap:wrap}.fHd,.fTf,.fPs,.fSt{flex:none}.fChw{flex:none;height:var(--fh);min-height:200px}",
 ".fSplit{display:flex;flex:none;height:12px;align-items:center;justify-content:center;cursor:row-resize;touch-action:none;margin:-6px 0 -6px;position:relative;z-index:3}.fSplit i{width:56px;height:4px;border-radius:99px;background:var(--ln);transition:background .15s}.fSplit:hover i,.fSplit.on i,.fSplit:focus-visible i{background:var(--ac)}",
 ".fSt{padding:10px 12px 0}.fSt .vtHint,.fNote{display:block}.fSt .vtStops:empty{display:block}",
 ".fBot{display:block;flex:1;min-height:90px;overflow:auto;padding:4px 12px 12px}",
