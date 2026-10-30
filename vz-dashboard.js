@@ -2391,10 +2391,61 @@ var LFAQ=[
  {k:/demo|real|uang|sungguhan|simulasi|money/i,id:"Semua tipe akun yang kami sediakan adalah demo dan simulasi, dan payout didanai oleh Vekxt Zero.",en:"All account types we provide are demo and simulated, and payouts are funded by Vekxt Zero."}
 ];
 var lcHist=[],lcGreet=null;
+/* ===== Live CS: chat ke tim lewat Telegram (Worker vekxt-cs). Tombol "Live CS" muncul di header chat. ===== */
+var CS_API="https://vekxt-cs.hamada69r.workers.dev"; /* ganti kalau nama Worker CS kamu beda; kosongkan untuk menyembunyikan Live CS */
+var LCL={
+  id:{live:"Live CS",ai:"Asisten",title:"Live CS",ph:"Tulis pesan ke tim CS...",note:"Dibalas langsung oleh tim lewat Telegram. Balasan bisa butuh beberapa menit.",hello:"Kamu terhubung ke CS manusia. Tulis pesanmu di sini, balasan muncul di chat ini.",err:"Pesan gagal terkirim. Coba lagi atau hubungi lewat Telegram.",lim:"Terlalu banyak pesan. Tunggu sebentar."},
+  en:{live:"Live CS",ai:"Assistant",title:"Live CS",ph:"Message our support team...",note:"Answered live by our team via Telegram. Replies may take a few minutes.",hello:"You are connected to human support. Write your message here, replies appear in this chat.",err:"Message failed to send. Try again or contact us on Telegram.",lim:"Too many messages. Please wait a moment."}};
+var lcLive=false,lcLast=0,lcPolling=false,lcTick=null,lcSaved=null,lcKeyUsed="",lcInit=false,lcHello=null,lcPT=0,lcGen=0;
+function lcKeyNow(){return"vzCs:"+(user?(user.uid||user.email):"guest")}
+function lcSid(){
+  var k=lcKeyNow(),v=null;try{v=localStorage.getItem(k)}catch(e){}
+  if(!/^[a-f0-9]{32}$/.test(v||"")){var a=new Uint8Array(16);crypto.getRandomValues(a);v=Array.prototype.map.call(a,function(x){return("0"+x.toString(16)).slice(-2)}).join("");try{localStorage.setItem(k,v)}catch(e){}}
+  return v}
+function lcLoadHistory(){lcGen++;lcPolling=false;$("lcLog").innerHTML="";lcHello=lcAdd("b",LCL[lang].hello);lcLast=0;lcKeyUsed=lcKeyNow();lcPoll(true)}
+function lcPoll(all){
+  if(!lcLive||lcPolling)return;lcPolling=true;lcPT=Date.now();var g=lcGen;
+  fetch(CS_API+"/poll?sid="+lcSid()+"&after="+(all?0:lcLast)+(all?"&all=1":"")).then(function(r){return r.json()}).then(function(d){
+    if(!lcLive||g!==lcGen||!d||!d.ok)return;
+    d.m.forEach(function(m){
+      if(m.r==="a"){if(m.id<=lcLast)return;lcLast=m.id;if(!all&&!$("lcChat").classList.contains("open"))$("lcBtn").style.boxShadow="0 0 0 3px #22C55E"}
+      lcAdd(m.r==="u"?"u":"b",m.t)})
+  }).catch(function(){}).then(function(){if(g===lcGen)lcPolling=false})}
+function lcTickFn(){if(!lcLive)return;var open=$("lcChat").classList.contains("open");if(open||Date.now()-lcPT>20000)lcPoll(false)}
+function lcSetLive(on){
+  if(on===lcLive)return;lcLive=on;lcGen++;
+  try{localStorage.setItem("vzCsLive",on?"1":"")}catch(e){}
+  var log=$("lcLog");
+  if(on){lcSaved=Array.prototype.slice.call(log.children);lcLoadHistory();if(!lcTick)lcTick=setInterval(lcTickFn,3000)}
+  else{log.innerHTML="";(lcSaved||[]).forEach(function(n){log.appendChild(n)});lcSaved=null;if(lcTick){clearInterval(lcTick);lcTick=null}}
+  lcLiveUI()}
+function lcSendLive(q){
+  var c=LCL[lang];q=q.trim().slice(0,1000);if(!q)return;lcAdd("u",q);
+  fetch(CS_API+"/msg",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sid:lcSid(),text:q,name:(user&&user.name)||"",email:(user&&user.email)||"",lang:lang})})
+    .then(function(r){return r.json().catch(function(){return{}})})
+    .then(function(d){if(!d.ok)lcAdd("b",d.error==="rate"?c.lim:c.err);else if(d.fwd===false)lcAdd("b",c.err);lcPT=0})
+    .catch(function(){lcAdd("b",c.err)})}
+function lcLiveUI(){
+  if(!CS_API)return;var c=LCL[lang],cc=LC[lang],b=$("lcLive");
+  if(!b){
+    b=document.createElement("button");b.id="lcLive";b.type="button";
+    b.style.cssText="font:inherit;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap";
+    var go=$("lcGo"),w=document.createElement("div");w.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end";
+    go.parentNode.insertBefore(w,go);w.appendChild(b);w.appendChild(go);
+    b.onclick=function(){lcSetLive(!lcLive)};
+    $("lcBtn").addEventListener("click",function(){$("lcBtn").style.boxShadow=""})}
+  b.textContent=lcLive?c.ai:c.live;
+  $("lcTitle").textContent=lcLive?c.title:cc.title;$("lcIn").placeholder=lcLive?c.ph:cc.ph;$("lcNote").textContent=lcLive?c.note:cc.note;
+  $("lcChips").style.display=lcLive?"none":"";
+  if(lcLive&&lcHello)lcHello.textContent=c.hello;
+  if(lcLive&&lcKeyUsed!==lcKeyNow())lcLoadHistory();
+  if(!lcInit){lcInit=true;try{if(localStorage.getItem("vzCsLive")==="1")lcSetLive(true)}catch(e){}}}
+
 function lcAdd(r,tx){var d=document.createElement("div");d.className="cp-m "+(r==="u"?"cp-u":"cp-b");d.textContent=tx;$("lcLog").appendChild(d);$("lcLog").scrollTop=$("lcLog").scrollHeight;return d}
 function lcAnswer(q){for(var i=0;i<LFAQ.length;i++){if(LFAQ[i].k.test(q))return LFAQ[i][lang]}return LC[lang].fb}
 function lcAsk(q){
   q=q.trim();if(!q)return;
+  if(lcLive){lcSendLive(q);return}
   lcAdd("u",q);lcHist.push({role:"user",content:q});
   var w=lcAdd("b","...");
   var done=function(tx){w.textContent=tx;lcHist.push({role:"assistant",content:tx});$("lcLog").scrollTop=$("lcLog").scrollHeight};
@@ -2408,6 +2459,7 @@ function chatUI(){
   $("lcChips").innerHTML=(user?c.chipsU:c.chipsA).map(function(x){return'<button type="button">'+esc(x)+'</button>'}).join("");
   var g=user?c.greetU.replace("{n}",user.name||user.email):c.greet;
   if(!lcGreet)lcGreet=lcAdd("b",g);else if($("lcLog").children.length===1)lcGreet.textContent=g;
+  lcLiveUI();
 }
 $("lcBtn").onclick=function(){var o=$("lcChat").classList.toggle("open");this.setAttribute("aria-expanded",o)};
 (function(){
