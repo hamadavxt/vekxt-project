@@ -1924,12 +1924,12 @@ function pWdList(){pFundedLoad();return PERPS.filter(function(a){return a.status
 /* saldo akun simulasi (Perps / Vekxt Trader) langsung dikurangi sebesar nominal withdraw; ditolak admin = dikembalikan */
 function pWdDeduct(id,amt,ref){var a=null;PERPS.forEach(function(x){if(x.id===id)a=x});amt=Number(amt);if(!a||!(amt>0))return;
   var q=function(v){return Math.round(v*1e8)/1e8};
-  a.balance=q(a.balance-amt);if(a.day&&isFinite(a.day.startBal))a.day.startBal=q(a.day.startBal-amt);if(isFinite(a.peak))a.peak=q(a.peak-amt);
+  a.balance=q(a.balance-amt);if(a.day&&isFinite(a.day.startBal))a.day.startBal=q(a.day.startBal-amt);if(isFinite(a.peak)&&!(a.rules&&a.rules.lock))a.peak=q(a.peak-amt);
   a.wdTot=Math.round(((a.wdTot||0)+amt)*100)/100;(a.wd=a.wd||[]).push({ref:String(ref||""),amt:amt,at:Date.now()});pSave();pPush(true)}
-function wdDeduct(ca,rec,ref){if(ca&&ca.perp&&!rec.test)pWdDeduct(ca.id,rec.amt,ref)}
+function wdDeduct(ca,rec,ref){if(ca&&ca.perp)pWdDeduct(ca.id,rec.amt,ref)}
 function wdReconcile(){var ch=false;PERPS.forEach(function(a){(a.wd||[]).forEach(function(e){if(e.rf||!e.ref||e.ref==="local")return;
   var r=null;wdList.forEach(function(x){if(x.id===e.ref)r=x});if(!r||r.status!=="rejected")return;
-  a.balance+=e.amt;if(a.day)a.day.startBal+=e.amt;a.peak+=e.amt;a.wdTot=Math.max(0,Math.round(((a.wdTot||0)-e.amt)*100)/100);e.rf=1;ch=true})});if(ch){pSave();pPush(true)}}
+  a.balance+=e.amt;if(a.day)a.day.startBal+=e.amt;if(!(a.rules&&a.rules.lock))a.peak+=e.amt;a.wdTot=Math.max(0,Math.round(((a.wdTot||0)-e.amt)*100)/100);e.rf=1;ch=true})});if(ch){pSave();pPush(true)}}
 function pCertList(){pFundedLoad();return PERPS.filter(function(a){return a.isFunded}).map(pWdOne)}
 function wdAll(){return ACCOUNTS.concat(pWdList())}
 function wdIsInst(a){return /zero|instan/i.test(String(a.program||""))}
