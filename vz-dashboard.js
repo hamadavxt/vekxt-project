@@ -11,12 +11,12 @@ Object.assign(T.id,{"accLoad": "Memuat akun...", "accErr": "Gagal memuat akun.",
 Object.assign(T.id,{"accOff": "Offline", "accOffMsg": "Koneksi akun sedang terputus, data belum tersedia. Coba lagi beberapa saat."});Object.assign(T.en,{"accOff": "Offline", "accOffMsg": "The account connection is down, data is not available yet. Try again shortly."});
 Object.assign(T.id,{"addr": "Alamat lengkap", "addrPh": "Jalan, nomor, kota, kode pos, negara", "eAddr": "Isi alamat lengkap (minimal 10 karakter).", "google": "Lanjut dengan Google", "or": "atau", "needAddr": "Lengkapi alamat lengkap kamu untuk melanjutkan.", "verT": "Verifikasi email kamu", "verMsg": "Kami mengirim tautan verifikasi ke email kamu. Buka tautannya, lalu tekan tombol di bawah.", "verDone": "Saya sudah verifikasi", "verResend": "Kirim ulang email verifikasi", "verSent": "Email verifikasi dikirim.", "verNot": "Email belum terverifikasi. Cek inbox atau folder spam.", "eGoogle": "Login dengan Google gagal atau dibatalkan.", "pfAddr": "Alamat lengkap", "eProf": "Gagal menyimpan profil. Coba lagi."});Object.assign(T.en,{"addr": "Full address", "addrPh": "Street, number, city, postal code, country", "eAddr": "Enter your full address (at least 10 characters).", "google": "Continue with Google", "or": "or", "needAddr": "Please complete your full address to continue.", "verT": "Verify your email", "verMsg": "We sent a verification link to your email. Open it, then tap the button below.", "verDone": "I have verified", "verResend": "Resend verification email", "verSent": "Verification email sent.", "verNot": "Email is not verified yet. Check your inbox or spam folder.", "eGoogle": "Google sign-in failed or was cancelled.", "pfAddr": "Full address", "eProf": "Could not save your profile. Try again."});
 Object.assign(T.id,{"stT": "Statistik trading", "stWin": "Win rate", "stTrades": "Total trade", "stWL": "Menang / kalah", "stAvgW": "Rata-rata menang", "stAvgL": "Rata-rata kalah", "stPF": "Profit factor", "stBest": "Trade terbaik", "stWorst": "Trade terburuk", "stNet": "Total PnL", "stNone": "Belum ada trade tertutup.", "hiT": "Riwayat trading", "hiMore": "Tampilkan lebih banyak", "wdCrypto": "Crypto", "wdBank": "Bank (Indonesia)", "wdRise": "Rise", "wdSoon": "Segera hadir", "wdAddr": "Alamat wallet", "wdBankName": "Nama bank", "wdBankNo": "Nomor rekening", "wdBankHolder": "Nama pemilik rekening", "wdEAddr": "Alamat wallet tidak valid untuk network ini.", "wdEBank": "Lengkapi data bank dengan benar (nama bank, nomor rekening, nama pemilik).", "wdNote": "Permintaan penarikan ditinjau oleh tim sebelum diproses."});Object.assign(T.en,{"stT": "Trading statistics", "stWin": "Win rate", "stTrades": "Total trades", "stWL": "Wins / losses", "stAvgW": "Average win", "stAvgL": "Average loss", "stPF": "Profit factor", "stBest": "Best trade", "stWorst": "Worst trade", "stNet": "Total PnL", "stNone": "No closed trades yet.", "hiT": "Trading history", "hiMore": "Show more", "wdCrypto": "Crypto", "wdBank": "Bank (Indonesia)", "wdRise": "Rise", "wdSoon": "Coming soon", "wdAddr": "Wallet address", "wdBankName": "Bank name", "wdBankNo": "Account number", "wdBankHolder": "Account holder name", "wdEAddr": "Invalid wallet address for this network.", "wdEBank": "Complete the bank details correctly (bank name, account number, holder name).", "wdNote": "Withdrawal requests are reviewed by the team before they are processed."});
-Object.assign(T.id,{"n_offers":"Offers","n_cert":"Certificate","rf":"Perbarui","rfAgo":"Diperbarui","rfNow":"baru saja","rfS":" dtk lalu","rfM":" mnt lalu","rfFail":"Gagal memperbarui. Coba lagi.","rfTip":"Perbarui data akun (otomatis tiap 30 detik)",
+Object.assign(T.id,{"n_billing":"Billing","billT":"Billing","billLoad":"Memuat riwayat pembayaran...","billErr":"Riwayat pembayaran belum bisa dimuat. Coba lagi nanti.","billNone":"Belum ada pembayaran. Pembelian challenge kamu akan muncul di sini.","billTotal":"Total pembayaran","billOrders":"Jumlah order","billPaid":"Lunas","billInv":"Invoice","billOld":"Nominal tidak tercatat (order lama)","billCp":"Kupon","billNote":"Nominal sesuai yang dibayar setelah kupon. Butuh bukti pembayaran? Hubungi CS dengan nomor invoice.","n_offers":"Offers","n_cert":"Certificate","rf":"Perbarui","rfAgo":"Diperbarui","rfNow":"baru saja","rfS":" dtk lalu","rfM":" mnt lalu","rfFail":"Gagal memperbarui. Coba lagi.","rfTip":"Perbarui data akun (otomatis tiap 30 detik)",
 "crT":"Kredensial akun","crLogin":"Login","crPass":"Password","crServer":"Server","crShow":"Lihat","crHide":"Sembunyi","crNote":"Pakai data ini untuk login di aplikasi MetaTrader. Jangan bagikan ke siapa pun.",
 "kycT":"Verifikasi dokumen","kyc_none":"Belum diverifikasi","kyc_pending":"Menunggu review","kyc_verified":"Terverifikasi","kyc_rejected":"Ditolak","kycDesc":"Upload foto dokumen identitas (KTP, paspor, atau SIM) dan selfie sambil memegang dokumen tersebut. Pastikan semua teks terbaca jelas.","kycType":"Jenis dokumen","kycPass":"Paspor","kycId":"Foto dokumen identitas","kycSelfie":"Selfie sambil memegang dokumen","kycBtn":"Kirim untuk verifikasi","kycEFile":"Pilih foto dokumen dan selfie dulu.","kycEType":"Format file tidak didukung. Pakai JPG, PNG, atau WebP (dokumen boleh PDF, selfie harus foto).","kycEBig":"Ukuran file terlalu besar (maksimal 10 MB).","kycUp":"Mengunggah dokumen...","kycPendMsg":"Dokumen kamu sudah dikirim dan sedang ditinjau tim.","kycOkMsg":"Identitas kamu sudah terverifikasi.","kycRej":"Alasan penolakan","kycOff":"Verifikasi dokumen belum tersedia saat ini. Muat ulang halaman lalu coba lagi.",
 "ofT":"Penawaran untuk kamu","ofNone":"Belum ada penawaran aktif.","ofUse":"Pakai sekarang","ofUntil":"Berlaku sampai",
 "ceT":"Sertifikat","ceNone":"Sertifikat akan muncul di sini setelah akun kamu funded.","ceView":"Lihat sertifikat","ceFunded":"Funded"});
-Object.assign(T.en,{"n_offers":"Offers","n_cert":"Certificate","rf":"Refresh","rfAgo":"Updated","rfNow":"just now","rfS":"s ago","rfM":" min ago","rfFail":"Could not refresh. Try again.","rfTip":"Refresh account data (automatic every 30 seconds)",
+Object.assign(T.en,{"n_billing":"Billing","billT":"Billing","billLoad":"Loading payment history...","billErr":"Could not load payment history. Try again later.","billNone":"No payments yet. Your challenge purchases will appear here.","billTotal":"Total paid","billOrders":"Orders","billPaid":"Paid","billInv":"Invoice","billOld":"Amount not recorded (older order)","billCp":"Coupon","billNote":"Amounts are what you paid after coupons. Need a receipt? Contact support with the invoice number.","n_offers":"Offers","n_cert":"Certificate","rf":"Refresh","rfAgo":"Updated","rfNow":"just now","rfS":"s ago","rfM":" min ago","rfFail":"Could not refresh. Try again.","rfTip":"Refresh account data (automatic every 30 seconds)",
 "crT":"Account credentials","crLogin":"Login","crPass":"Password","crServer":"Server","crShow":"Show","crHide":"Hide","crNote":"Use these details to log in on the MetaTrader app. Never share them with anyone.",
 "kycT":"Document verification","kyc_none":"Not verified","kyc_pending":"Pending review","kyc_verified":"Verified","kyc_rejected":"Rejected","kycDesc":"Upload a photo of your ID (national ID, passport, or driver license) and a selfie holding that document. Make sure all text is clearly readable.","kycType":"Document type","kycPass":"Passport","kycId":"Photo of your ID document","kycSelfie":"Selfie holding the document","kycBtn":"Submit for verification","kycEFile":"Choose the ID photo and the selfie first.","kycEType":"Unsupported file. Use JPG, PNG, or WebP (the ID may be a PDF, the selfie must be a photo).","kycEBig":"File is too large (10 MB max).","kycUp":"Uploading documents...","kycPendMsg":"Your documents were submitted and are being reviewed by the team.","kycOkMsg":"Your identity is verified.","kycRej":"Rejection reason","kycOff":"Document verification is not available right now. Reload the page and try again.",
 "ofT":"Offers for you","ofNone":"No active offers right now.","ofUse":"Use now","ofUntil":"Valid until","ceT":"Certificates","ceNone":"Your certificate will appear here once your account is funded.","ceView":"View certificate","ceFunded":"Funded"});Object.assign(T.id,{"wdPaid":"Dibayar","pcView":"Lihat sertifikat payout"});Object.assign(T.en,{"wdPaid":"Paid","pcView":"View payout certificate"});
@@ -1898,11 +1898,11 @@ function dashHome(){
   if(ACCOUNTS.length||vtList().length)x+='<div class="qa"><a class="lg-btn ghost" href="'+home+'#plans">'+t("start")+'</a></div>';
   return x;
 }
-var view="home",VK=["home","lb","wd","prof","aff","offers","cert"];
+var view="home",VK=["home","lb","wd","prof","aff","offers","billing","cert"];
 var AFF_RATE=10; /* persen komisi affiliate */
 var WD_MIN=50; /* minimal penarikan (USD) */
 var wdBusy=false,wdFlash=false; /* wdBusy: cegah dobel kirim; wdFlash: tampilkan "tersimpan" setelah kirim */
-var affData=null,affState="idle",lbData=null,lbState="idle",lbAt=0;
+var affData=null,affState="idle",lbData=null,lbState="idle",lbAt=0,billData=null,billState="idle",billAt=0;
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function ls(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
 function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -2012,6 +2012,25 @@ function loadLb(){
   lbState="loading";
   apiPost({action:"lb"},function(d){lbData=d;lbState="ok";lbAt=Date.now();dash()},function(){lbState="err";lbAt=Date.now();dash()});
 }
+function loadBill(){
+  if(billState==="loading")return;
+  billState="loading";
+  apiPost({action:"billing"},function(d){billData=d;billState=d&&d.ok?"ok":"err";billAt=Date.now();dash()},function(){billState="err";billAt=Date.now();dash()});
+}
+function billKind(k,p){return k==="perp"?"Perps":k==="fut"||p==="fut"?"Futures":k==="vt"?"Vekxt Trader (CFD)":"CFD (MT5)"}
+function viewBill(){
+  var c='<div class="lg-card"><b>'+t("billT")+'</b>';
+  if(billState==="idle"||billState==="loading")return c+'<p style="margin-top:8px">'+t("billLoad")+'</p></div>';
+  if(billState!=="ok"||!billData)return c+'<p style="margin-top:8px">'+t("billErr")+'</p></div>';
+  var rows=billData.rows||[];
+  if(!rows.length)return c+'<p style="margin-top:8px">'+t("billNone")+'</p></div>';
+  var tot=0;rows.forEach(function(r){tot+=Number(r.usd)||0});
+  var h='<div class="lg-card"><div class="grid"><div><small>'+t("billTotal")+'</small><strong>'+money(tot)+'</strong></div><div><small>'+t("billOrders")+'</small><strong>'+rows.length+'</strong></div></div></div>';
+  h+=c+'<div style="margin-top:6px">'+rows.map(function(r){
+    var d=r.at?new Date(r.at).toISOString().slice(0,10):"-",nm=(r.p==="perp"?"Vekxt 1 Step Perpetuals":r.p==="fut"?"Vekxt Futures":r.p==="hyper"?"Hyper 1 Step":r.p==="nova"?"Nova 2 Step":r.p==="zero"?"Zero Instant":esc(r.p||""));
+    return'<div class="rl"><span><b>'+nm+" "+kfmt(r.s)+'</b><br/><small>'+esc(billKind(r.k,r.p))+" | "+d+" | "+t("billInv")+" "+esc(r.id)+(r.cp?" | "+t("billCp")+" "+esc(r.cp):"")+(r.m?" | "+esc(r.m):"")+'</small></span><span>'+(r.usd==null?'<small>'+t("billOld")+'</small>':money(r.usd))+" | "+t("billPaid")+'</span></div>'}).join("")+'</div><p style="margin-top:12px;font-size:13px">'+t("billNote")+'</p></div>';
+  return h;
+}
 function viewAff(){
   var d=affState==="ok"?affData:null;
   var h='<div class="lg-card"><b>'+t("affT")+'</b><p style="margin-top:8px">'+t("affDesc").replace("{d}",d?d.disc:15).replace("{c}",AFF_RATE)+'</p>';
@@ -2021,9 +2040,10 @@ function viewAff(){
   h+='</div><div class="lg-card"><div class="grid"><div><small>'+t("affSales")+'</small><strong>'+(d?d.sales:0)+'</strong></div><div><small>'+t("affComm")+'</small><strong>'+money(d?d.commission:0)+'</strong></div><div><small>'+t("affRate")+'</small><strong>'+AFF_RATE+'%</strong></div></div><p style="margin-top:14px;font-size:13px">'+t("affNote2")+'</p></div>';
   return h;
 }
+function lbType(k){return k==="perp"?"Perps":k==="fut"?"Futures":k==="vt"?"CFD Trader":"CFD MT5"}
 function lbRow(r,me){
   var rk=r.rank,col=rk===1?"#F5B84B":rk===2?"#C0C6CF":rk===3?"#CD7F32":"var(--muted)",up=r.pct>=0,ct=r.c?esc(r.c)+" \u00b7 ":"";
-  return'<div class="lbr'+(me?" me":"")+'"><span class="lbn" style="color:'+col+'">'+rk+'</span><div><b>'+esc(r.n)+'</b><small>'+ct+esc(r.p)+" "+kfmt(r.s)+(r.k==="perp"?" USDT":"")+'</small></div><strong class="'+(up?"up":"dn")+'">'+(up?"+":"")+r.pct.toFixed(2)+'%</strong></div>';
+  return'<div class="lbr'+(me?" me":"")+'"><span class="lbn" style="color:'+col+'">'+rk+'</span><div><b>'+esc(r.n)+'</b><small>'+ct+lbType(r.k)+" \u00b7 "+esc(r.p)+" "+kfmt(r.s)+(r.k==="perp"?" USDT":"")+(r.f?" \u00b7 Funded":"")+'</small></div><strong class="'+(up?"up":"dn")+'">'+(up?"+":"")+r.pct.toFixed(2)+'%</strong></div>';
 }
 function viewLb(){
   if(lbState==="idle"||lbState==="loading")return'<div class="lg-card"><b>'+t("lbT")+'</b><p style="margin-top:8px">'+t("lbLoad")+'</p></div>';
@@ -2146,7 +2166,7 @@ function lbReportMaybe(){
   if(Date.now()-last<1800000)return;
   pLoadAll();if(pFsState==="idle"){vtBoot();return}
   if(pFsState!=="ok")return;
-  var acc=[];PERPS.forEach(function(a){if(a.status!=="active"||a.demo)return;acc.push({p:a.program,s:a.size,pct:(a.balance+(a.wdTot||0)-a.size)/a.size*100,k:a.vt?"vt":"perp",f:a.isFunded?1:0})});
+  var acc=[];PERPS.forEach(function(a){if(a.status!=="active"||a.demo)return;acc.push({p:a.program,s:a.size,pct:(a.balance+(a.wdTot||0)-a.size)/a.size*100,k:a.fut?"fut":a.vt?"vt":"perp",f:a.isFunded?1:0})});
   try{localStorage.setItem(k,String(Date.now()))}catch(e){}
   apiPost({action:"lb_report",accounts:acc,profile:{n:user.name,c:(prof&&prof.country)||""}},function(){},function(){try{localStorage.removeItem(k)}catch(e){}})}
 function dash(){
@@ -2156,8 +2176,9 @@ function dash(){
   if(view==="wd"&&wdState==="idle")loadWd();
   if(view==="prof"&&kycState==="idle")loadKyc();
   if(view==="aff"&&affState==="idle")loadAff();
+  if(view==="billing"&&(billState==="idle"||((billState==="ok"||billState==="err")&&Date.now()-billAt>60000)))loadBill();
   if(view==="lb"&&(lbState==="idle"||((lbState==="ok"||lbState==="err")&&Date.now()-lbAt>60000)))loadLb();
-  h+=view==="lb"?viewLb():view==="wd"?viewWd():view==="prof"?viewProf():view==="aff"?viewAff():view==="offers"?viewOffers():view==="cert"?viewCert():dashHome();
+  h+=view==="lb"?viewLb():view==="wd"?viewWd():view==="prof"?viewProf():view==="aff"?viewAff():view==="offers"?viewOffers():view==="billing"?viewBill():view==="cert"?viewCert():dashHome();
   var db=$("dBody"),key=[view,selAcc,accState].join(":"),fresh=key!==animKey;animKey=key;
   db.innerHTML=h;db.classList.toggle("vz-anim",fresh);if($("pTerm"))pAfter();
   document.querySelectorAll(".dnav button").forEach(function(b){b.onclick=function(){view=b.dataset.k;if(view==="home"){selAcc=null;selP=null;selV=null}dash()}});
