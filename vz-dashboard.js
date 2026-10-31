@@ -2374,8 +2374,8 @@ document.querySelectorAll(".lg-lang button").forEach(function(b){b.onclick=funct
 function load(src,cb){var s=document.createElement("script");s.src=src;s.onload=cb;s.onerror=function(){msg("eGen")};document.head.appendChild(s)}
 var CHAT_AI=""; /* opsional: URL Worker AI chat (POST {messages,lang} -> {reply}). Kosong = jawaban FAQ otomatis. */
 var LC={
- id:{title:"Asisten CS",tg:"CS manusia",ph:"Tulis pertanyaan...",note:"Balasan otomatis, bukan nasihat keuangan.",greet:"Halo! Saya asisten Vekxt Zero. Ada yang bisa dibantu soal login atau pendaftaran?",greetU:"Halo, {n}! Ada yang bisa dibantu soal akun atau challenge kamu?",chipsA:["Cara daftar","Lupa password","Verifikasi email","Harga"],chipsU:["Withdraw","Verifikasi dokumen","Kredensial MT5","Data tidak update"],fb:"Maaf, saya belum punya jawaban itu. Hubungi CS manusia lewat Telegram ya."},
- en:{title:"Support assistant",tg:"Human support",ph:"Type your question...",note:"Automated replies, not financial advice.",greet:"Hi! I am the Vekxt Zero assistant. Need help with login or sign-up?",greetU:"Hi, {n}! Need help with your account or challenge?",chipsA:["How to sign up","Forgot password","Verify email","Prices"],chipsU:["Withdraw","Document verification","MT5 credentials","Data not updating"],fb:"Sorry, I do not have that answer. Please contact human support on Telegram."}
+ id:{title:"Asisten CS",tg:"CS manusia",ph:"Tulis pertanyaan...",note:"Balasan otomatis, bukan nasihat keuangan.",greet:"Halo! Saya asisten Vekxt Zero. Ada yang bisa dibantu soal login atau pendaftaran?",greetU:"Halo, {n}! Ada yang bisa dibantu soal akun atau challenge kamu?",chipsA:["Cara daftar","Lupa password","Verifikasi email","Harga"],chipsU:["Withdraw","Verifikasi dokumen","Kredensial MT5","Data tidak update"],fb:"Maaf, saya belum punya jawaban itu. Tekan tombol Live CS di atas untuk bicara dengan tim kami."},
+ en:{title:"Support assistant",tg:"Human support",ph:"Type your question...",note:"Automated replies, not financial advice.",greet:"Hi! I am the Vekxt Zero assistant. Need help with login or sign-up?",greetU:"Hi, {n}! Need help with your account or challenge?",chipsA:["How to sign up","Forgot password","Verify email","Prices"],chipsU:["Withdraw","Document verification","MT5 credentials","Data not updating"],fb:"Sorry, I do not have that answer. Tap Live CS above to talk to our team."}
 };
 var LFAQ=[
  {k:/dokumen|document|kyc|identitas|ktp|passport|paspor|selfie/i,id:"Verifikasi dokumen: buka tab Profile, scroll ke bagian Verifikasi dokumen, upload foto KTP/paspor/SIM dan selfie sambil memegang dokumennya. Tim akan meninjau, statusnya muncul di kartu yang sama.",en:"Document verification: open the Profile tab, scroll to Document verification, upload a photo of your ID and a selfie holding it. The team reviews it and the status shows on the same card."},
@@ -2431,7 +2431,7 @@ function lcLiveUI(){
     b=document.createElement("button");b.id="lcLive";b.type="button";
     b.style.cssText="font:inherit;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap";
     var go=$("lcGo"),w=document.createElement("div");w.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end";
-    go.parentNode.insertBefore(w,go);w.appendChild(b);w.appendChild(go);
+    go.parentNode.insertBefore(w,go);w.appendChild(b);go.style.display="none";
     b.onclick=function(){lcSetLive(!lcLive)};
     $("lcBtn").addEventListener("click",function(){$("lcBtn").style.boxShadow=""})}
   b.textContent=lcLive?c.ai:c.live;
