@@ -1334,13 +1334,28 @@ function vtOpen(id){
   if(!$("vtApp")){var d=document.createElement("div");d.id="vtApp";document.body.appendChild(d);vtCss()}
   $("vtApp").style.display="flex";document.body.style.overflow="hidden";vtRender()}
 function vtShut(){VT.on=false;vtDrag=null;vtTap=null;if($("vtApp"))$("vtApp").style.display="none";document.body.style.overflow="";if(vtCh){try{vtCh.remove()}catch(e){}vtCh=vtCs=null}dash()}
+var VDSZ0={L:260,R:360,B:230},VDSZ=JSON.parse(JSON.stringify(VDSZ0));
+(function(){try{var j=JSON.parse(localStorage.getItem("vz.vd")||"{}");for(var k in VDSZ0)if(+j[k]>=80)VDSZ[k]=+j[k]}catch(e){}})();
+function vdBindSp(){
+  var w=document.querySelector(".vdWrap");if(!w)return;
+  var ap=function(){w.style.setProperty("--vdL",VDSZ.L+"px");w.style.setProperty("--vdR",VDSZ.R+"px");w.style.setProperty("--vdB",VDSZ.B+"px")};
+  w.querySelectorAll(".vdSp").forEach(function(sp){
+    sp.ondblclick=function(){VDSZ=JSON.parse(JSON.stringify(VDSZ0));try{localStorage.setItem("vz.vd",JSON.stringify(VDSZ))}catch(e){}ap()};
+    sp.onpointerdown=function(e){if(e.button>0)return;var k=sp.dataset.vs,x0=e.clientX,y0=e.clientY,v0=VDSZ[k],r=w.getBoundingClientRect();
+      try{sp.setPointerCapture(e.pointerId)}catch(x){}sp.classList.add("on");e.preventDefault();
+      var mv=function(ev){var dx=ev.clientX-x0,dy=ev.clientY-y0,v=k==="L"?v0+dx:k==="R"?v0-dx:v0-dy,
+        lim={L:[170,r.width-VDSZ.R-420],R:[280,r.width-VDSZ.L-420],B:[90,r.height-300]}[k];
+        VDSZ[k]=Math.round(Math.max(lim[0],Math.min(Math.max(lim[0],lim[1]),v)));ap()};
+      var up=function(){sp.classList.remove("on");sp.onpointermove=sp.onpointerup=sp.onpointercancel=null;try{localStorage.setItem("vz.vd",JSON.stringify(VDSZ))}catch(e){}};
+      sp.onpointermove=mv;sp.onpointerup=up;sp.onpointercancel=up}})}
 var VDCSS=[
 "@media(min-width:900px){",
 "#vtApp:not(.fut) .vtBd.vtT{max-width:none;margin:0}",
-".vdWrap{display:grid;grid-template-columns:260px minmax(0,1fr) 360px;flex:1;min-height:0;height:100%}",
+".vdWrap{display:grid;grid-template-columns:var(--vdL,260px) minmax(0,1fr) var(--vdR,360px);flex:1;min-height:0;height:100%;position:relative}",
+".vdSp{position:absolute;z-index:6;touch-action:none;transition:background .12s}.vdSp:hover,.vdSp.on{background:rgba(167,139,250,.55)}.vdSpL,.vdSpR{top:0;bottom:0;width:7px;cursor:col-resize}.vdSpL{left:calc(var(--vdL,260px) - 3px)}.vdSpR{right:calc(var(--vdR,360px) - 3px)}.vdSpB{position:relative;flex:none;height:7px;margin:-3px 0;cursor:row-resize}",
 ".vdMk{overflow:auto;border-right:1px solid var(--ln);padding:10px;min-width:0}.vdMk .vtMk.vdOn{background:rgba(167,139,250,.12)}",
 ".vdMain{display:flex;flex-direction:column;min-width:0;min-height:0}.vdMain .vtGrid{flex:1;min-height:0}",
-".vdBot{flex:none;height:230px;overflow:auto;border-top:1px solid var(--ln);padding:8px 14px}.vdBot .vtC{padding:8px 12px;margin-bottom:8px}",
+".vdBot{flex:none;height:var(--vdB,230px);overflow:auto;border-top:1px solid var(--ln);padding:8px 14px}.vdBot .vtC{padding:8px 12px;margin-bottom:8px}",
 ".vdTk{border-left:1px solid var(--ln);overflow:auto;min-width:0}.vdDock{padding:14px}.vdDock>div{padding:0}.vdDock #osX{display:none}",
 "#vtApp #vtOrdB{display:none}.vtTop{padding:10px 14px}.vtTfR{padding:0 14px 6px}.vtStick{padding:10px 14px}",
 "}"].join("");
@@ -1464,7 +1479,7 @@ function vtTradeHtml(a){
    +'<div class="vtLotB"><div><button type="button" data-bl="-">\u2212</button><input id="vtLotB" inputmode="decimal" value="'+VT.lot+'"><button type="button" data-bl="+">+</button></div></div>'
    +'<button type="button" class="vtSd vtBuy" data-bs="buy"'+(on?"":" disabled")+'>BUY<small data-ask="'+i.id+'">\u2014</small></button></div>';
   var core='<div class="vtGrid"><div class="vtL">'+top+tf+chart+'</div></div><div style="display:none" id="vtHold"><input id="vtLot" value="'+VT.lot+'"><input id="vtPx"><input id="vtTp"><input id="vtSl"></div>';
-  if(vtDesk())return'<div class="vdWrap"><aside class="vdMk">'+vdMkHtml()+'</aside><div class="vdMain">'+core+'<div class="vdBot" id="vdBot">'+vtPosHtml(a)+'</div>'+bar+'</div><aside class="vdTk" id="vdTk"></aside></div>';
+  if(vtDesk())return'<div class="vdWrap" style="--vdL:'+VDSZ.L+'px;--vdR:'+VDSZ.R+'px;--vdB:'+VDSZ.B+'px"><aside class="vdMk">'+vdMkHtml()+'</aside><div class="vdMain">'+core+'<div class="vdSp vdSpB" data-vs="B" title="'+L("Tarik untuk ubah ukuran (klik dua kali: reset)","Drag to resize (double-click: reset)")+'"></div><div class="vdBot" id="vdBot">'+vtPosHtml(a)+'</div>'+bar+'</div><aside class="vdTk" id="vdTk"></aside><div class="vdSp vdSpL" data-vs="L"></div><div class="vdSp vdSpR" data-vs="R"></div></div>';
   return core+bar}
 function vtPosHtml(a){
   var tabs='<div class="vtTabs">'+[["open","Open Positions"],["pend","Pending Orders"],["hist","History"]].map(function(k){return'<button type="button" data-pt="'+k[0]+'" class="'+(VT.pt===k[0]?"on":"")+'">'+k[1]+'</button>'}).join("")+'</div>';
@@ -1579,7 +1594,7 @@ function vtBind(a){
     vtToast(VT.inst?L("Instan order aktif.","Instant order on."):L("Instan order mati.","Instant order off."),VT.inst)};
   $("vtStops").onclick=function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.st)vtAddStop(b.dataset.st);else if(b.dataset.rm)vtRmStop(b.dataset.rm)};
   var chg=function(){vtLsig="";vtSyncLines();vtStopsUI()};$("vtSl").oninput=chg;$("vtTp").oninput=chg;
-  var ob=$("vtOrdB");if(ob)ob.onclick=function(){vtOrdSheet()};var cfb=$("vtCfgB");if(cfb)cfb.onclick=vtCfgSheet;vtStopsUI();if(vtDesk()&&$("vdTk"))vtOrdSheet()}
+  var ob=$("vtOrdB");if(ob)ob.onclick=function(){vtOrdSheet()};var cfb=$("vtCfgB");if(cfb)cfb.onclick=vtCfgSheet;vtStopsUI();if(vtDesk()&&$("vdTk"))vtOrdSheet();vdBindSp()}
 /* ===== VEKXT FUTURES: terminal simulasi futures gaya CME. Dasar harga: Biquote (spot/CFD) dibulatkan ke tick, bukan harga kontrak bursa. Mesin: PE (opsi futures). Margin dan komisi di bawah adalah angka awal, ubah di FI ===== */
 /* m = pengali ($ per poin), tick = langkah harga, mg = margin harian per kontrak ($), fee = komisi per kontrak per sisi ($), w = bobot terhadap batas kontrak (1 = mini, 0.1 = micro) */
 var FI=[
@@ -2553,18 +2568,69 @@ var TRCSS='#vzTr{position:fixed;inset:0;z-index:300;background:#080A0D;color:#F5
 +'.trpk{display:flex;align-items:center;gap:8px;width:100%;padding:10px 0!important;border-bottom:1px solid var(--ln)!important}.trpk>span:first-child{flex:1;display:flex;align-items:center;text-align:left;font-weight:700}'
 +'#trNote{position:absolute;left:12px;right:12px;bottom:130px;background:#191B21;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;display:none;z-index:6}'
 +'html[data-theme="light"] #pTerm .lg-card{--surface:#111318;--ink:#F5F5F5;--muted:#A1A1AA;--line:#292B32;--accent:#F5B84B;--accent-ink:#080A0D;color:#F5F5F5}#pTerm .lg-card{background:#111318!important;background-image:none!important;border:1px solid #292B32!important;box-shadow:none!important}#pEq .eqh{display:flex;justify-content:space-between;align-items:center;gap:8px}#pEq .eqs{display:flex;background:#191B21;border:1px solid #292B32;border-radius:10px;padding:3px}#pEq .eqs button{background:none;border:0;color:#A1A1AA;font:inherit;font-weight:600;padding:5px 12px;border-radius:8px;cursor:pointer}#pEq .eqs button.on{background:#292B32;color:#fff}#pEq svg{width:100%;height:auto;display:block;touch-action:pan-y;margin-top:6px}#pEq text{fill:#A1A1AA;font-size:10px}#pEqTip{font-size:12px;margin-top:8px;color:#A1A1AA;min-height:18px}#pEq .eqlg{display:flex;justify-content:center;gap:18px;color:#A1A1AA;font-size:12px;margin-top:4px}#pEq .eqlg i{display:inline-block;width:14px;height:2px;margin-right:6px;vertical-align:middle}#pEq .eqlg i.ds{background:none;border-top:2px dashed #A1A1AA;height:0}.trhide,#pTk{display:none!important}.trbtnwrap{margin:0 0 12px}.trbtnwrap .lg-btn{width:100%}.trni{display:block;width:22px;height:22px;margin:0 auto 3px;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat}.trico{position:relative;width:24px;height:24px;border-radius:50%;display:inline-flex!important;align-items:center;justify-content:center;flex:none!important;overflow:hidden;vertical-align:middle;margin-right:8px;font-size:9px;font-weight:700}.trico i{font-style:normal;color:#fff}.trico img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#080A0D}.trico.ok{background:none!important}.trico.ok i{display:none}.trbd{padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700}.trbd.l{background:rgba(34,197,94,.16);color:#22C55E}.trbd.s{background:rgba(240,68,82,.16);color:#F04452}.trhg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 8px;margin-top:12px}.trhg small{display:block;color:var(--mu);font-size:12px}.trhg b{font-size:14px;word-break:break-word}.trhd2{grid-template-columns:1fr 1fr;border-top:1px solid var(--ln);padding-top:12px}.trlb{color:var(--mu);margin-bottom:10px}.trshr{width:28px;height:28px;display:inline-flex!important;align-items:center;justify-content:center;border:1px solid var(--ln)!important;border-radius:8px;color:var(--mu)}';
-var TRCSS2=["@media(min-width:1000px){",
-"#vzTr .trmain{display:grid;grid-template-columns:minmax(0,1fr) 400px;grid-template-rows:auto minmax(0,1fr) minmax(0,1.2fr)}",
-"#vzTr .trpane{position:static;inset:auto;display:block!important;overflow:auto;padding:12px;border-left:1px solid var(--ln);border-top:1px solid var(--ln);min-height:0}",
-"#vzTr #trP_chart{grid-column:1;grid-row:1/4;display:flex!important;padding:0;border:0;position:relative;overflow:hidden}",
-"#vzTr #trP_acc{grid-column:2;grid-row:1;border-top:0}#vzTr #trP_book{grid-column:2;grid-row:2}#vzTr #trP_pos{grid-column:2;grid-row:3}",
-"#vzTr .trnav{display:none}#vzTr .tract{max-width:none;padding:8px 12px}#vzTr .tract button{padding:12px 8px!important}",
+var TRCSS2=[
+"#vzTr .trpn{display:contents}#vzTr .trph,#vzTr .trsp,#vzTr .trdk{display:none}#vzTr .trmid{padding:8px 0;font-size:18px;font-weight:700}#vzTr .trh4{margin:12px 0 4px;font-size:12px;color:var(--mu)}#vzTr .trgb{display:flex;gap:8px}#vzTr .trgb .trgo{margin-top:10px}",
+"#vzTr .trbk div{position:relative}",
+"@media(min-width:1000px){",
+"#vzTr .trdk{display:block}",
+"#vzTr .trmain{display:grid;grid-template-columns:var(--wA,250px) 5px minmax(0,1fr) 5px var(--wC,270px) 5px var(--wD,320px);grid-template-rows:minmax(0,1fr) 5px var(--hE,260px);background:#080A0D;padding:0 4px 4px}",
+"#vzTr .trpn{display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;background:#0B0D11;border:1px solid var(--ln);border-radius:6px;overflow:hidden}",
+"#vzTr .trpn[data-s=A]{grid-column:1;grid-row:1}#vzTr .trpn[data-s=B]{grid-column:3;grid-row:1}#vzTr .trpn[data-s=C]{grid-column:5;grid-row:1}#vzTr .trpn[data-s=D]{grid-column:7;grid-row:1}#vzTr .trpn[data-s=E]{grid-column:1/6;grid-row:3}#vzTr .trpn[data-s=F]{grid-column:7;grid-row:3}",
+"#vzTr .trph{display:flex;align-items:center;gap:8px;flex:none;height:30px;padding:0 10px;font-size:12px;font-weight:700;color:var(--mu);border-bottom:1px solid var(--ln);cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;background:#111318}",
+"#vzTr .trph i{font-style:normal;letter-spacing:-2px;opacity:.6}#vzTr .trpn.drag{opacity:.55}#vzTr .trpn.drop{outline:2px solid var(--ac);outline-offset:-2px}",
+"#vzTr .trpn>.trpane{position:static;inset:auto;display:block!important;flex:1;min-height:0;overflow:auto;padding:10px;border:0}#vzTr .trpn>#trP_chart{display:flex!important;padding:0;overflow:hidden}",
+"#vzTr .trsp{display:block;position:relative;z-index:4;touch-action:none;border-radius:3px;transition:background .12s}#vzTr .trsp.v{cursor:col-resize}#vzTr .trsp.h{cursor:row-resize}#vzTr .trsp:hover,#vzTr .trsp.on{background:var(--ac)}",
+"#vzTr .trsp[data-sp=wA]{grid-column:2;grid-row:1}#vzTr .trsp[data-sp=wC]{grid-column:4;grid-row:1}#vzTr .trsp[data-sp=wD]{grid-column:6;grid-row:1/4}#vzTr .trsp.h1{grid-column:1/6;grid-row:2}#vzTr .trsp.h2{grid-column:7;grid-row:2}",
+"#vzTr .tract,#vzTr .trnav{display:none!important}",
 "#vzTr .trsh{align-items:center;justify-content:center}#vzTr .trsb{max-width:440px;border-radius:16px;max-height:90%}",
-"#vzTr #trNote{bottom:80px;left:auto;right:420px;max-width:420px}",
+"#vzTr #trNote{left:50%;right:auto;transform:translateX(-50%);bottom:24px;width:min(480px,90%)}",
+"#vzTr #trP_pos{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-content:start}#vzTr #trP_pos>.trcard{margin:0}#vzTr #trP_pos>h4,#vzTr #trP_pos>p,#vzTr #trP_pos>.trgo{grid-column:1/-1;margin:4px 0}",
+"#vzTr #trP_mk input,#vzTr #trP_tk input[type=number]{width:100%;background:#080A0D;color:#F5F5F5;border:1px solid var(--ln);border-radius:8px;padding:8px 10px;font-size:13px}#vzTr #trP_tk input[type=number]{margin-top:4px;font-size:14px}",
+"#vzTr #trP_tk label{display:block;color:var(--mu);margin-bottom:10px}#vzTr #trP_tk input[type=range]{width:100%;margin-top:6px}#vzTr #trP_tk .trch button{padding:4px 10px!important}",
+"#vzTr #trP_mk .trpk{padding:8px 4px!important;font-size:13px}#vzTr #trP_mk .trpk>span:nth-child(2){display:none}#vzTr .trpk.on{background:var(--sf)!important}",
+"#vzTr .trbk{font-size:12px}",
 "}"].join("");
 (function(){var st=document.createElement("style");st.textContent=TRCSS+TRCSS2;document.head.appendChild(st)})();
 function trDesk(){return window.innerWidth>=1000}
-window.addEventListener("resize",function(){if(TRV&&TRV.style.display!=="none"&&TRV.offsetParent!==null){trTabGo(trDesk()?"chart":trTab)}});
+var trTkKey="",trLsAt=0,TRPN=[["mk","Market"],["chart","Chart"],["book","Order Book / Trades"],["tk","Order"],["pos","Positions"],["acc","Account"]],TRSL0={A:"mk",B:"chart",C:"book",D:"tk",E:"pos",F:"acc"},TRSZ0={wA:250,wC:270,wD:320,hE:260},TRLAY=JSON.parse(JSON.stringify(TRSL0)),TRSZ=JSON.parse(JSON.stringify(TRSZ0));
+(function(){try{var j=JSON.parse(localStorage.getItem("vzTr.lay")||"{}");
+  if(j.lay&&Object.keys(j.lay).sort().join()===Object.keys(TRSL0).join()&&Object.keys(j.lay).map(function(k){return j.lay[k]}).sort().join()===Object.keys(TRSL0).map(function(k){return TRSL0[k]}).sort().join())TRLAY=j.lay;
+  if(j.sz)for(var k in TRSZ0)if(isFinite(+j.sz[k])&&+j.sz[k]>0)TRSZ[k]=+j.sz[k]}catch(e){}})();
+function trMainHtml(){
+  var body={chart:'<div class="trpane on" id="trP_chart"><div class="trtools" id="trTools"></div><div class="trcw"><div id="trChEl"></div><canvas id="trOv"></canvas></div></div>',book:'<div class="trpane" id="trP_book"></div>',pos:'<div class="trpane" id="trP_pos"></div>',acc:'<div class="trpane" id="trP_acc"></div>',mk:'<div class="trpane" id="trP_mk"></div>',tk:'<div class="trpane" id="trP_tk"></div>'};
+  return'<div class="trmain">'+TRPN.map(function(p){return'<div class="trpn" data-p="'+p[0]+'"><div class="trph" title="'+L("Tarik untuk menukar posisi panel","Drag to swap panel")+'"><i>&#8942;&#8942;</i>'+p[1]+'</div>'+body[p[0]]+'</div>'}).join("")
+  +'<div class="trsp v" data-sp="wA"></div><div class="trsp v" data-sp="wC"></div><div class="trsp v" data-sp="wD"></div><div class="trsp h h1" data-sp="hE"></div><div class="trsp h h2" data-sp="hE"></div></div>'}
+function trMkInit(){var e=$("trP_mk");if(!e)return;e.innerHTML='<input id="trSrch" type="search" autocomplete="off" placeholder="'+L("Cari koin, mis. PEPE, SOL, XAU","Search coin, e.g. PEPE, SOL, XAU")+'"><div class="trch">'+PCATS.map(function(c){return'<button type="button" data-cat="'+c[0]+'" class="'+(c[0]===pCatSel?"on":"")+'">'+L(c[1],c[2])+'</button>'}).join("")+'</div><div id="trList"></div>';$("trSrch").oninput=trList;trList()}
+function trLayApply(){var m=document.querySelector("#vzTr .trmain");if(!m)return;
+  Object.keys(TRLAY).forEach(function(k){var p=m.querySelector('.trpn[data-p="'+TRLAY[k]+'"]');if(p)p.dataset.s=k});
+  Object.keys(TRSZ).forEach(function(k){m.style.setProperty("--"+k,TRSZ[k]+"px")})}
+function trLaySave(){try{localStorage.setItem("vzTr.lay",JSON.stringify({lay:TRLAY,sz:TRSZ}))}catch(e){}}
+function trLayReset(){TRLAY=JSON.parse(JSON.stringify(TRSL0));TRSZ=JSON.parse(JSON.stringify(TRSZ0));trLaySave();trLayApply()}
+function trTkOut(h){var e=trDesk()&&$("trP_tk");if(e)e.innerHTML=h;else trSheet(h)}
+function trLayBind(){
+  var m=TRV.querySelector(".trmain");
+  m.addEventListener("dblclick",function(e){if(e.target.closest(".trsp"))trLayReset()});
+  m.addEventListener("pointerdown",function(e){
+    if(!trDesk()||e.button>0)return;
+    var sp=e.target.closest(".trsp");
+    if(sp){var k=sp.dataset.sp,x0=e.clientX,y0=e.clientY,v0=TRSZ[k],r=m.getBoundingClientRect();
+      try{sp.setPointerCapture(e.pointerId)}catch(x){}sp.classList.add("on");e.preventDefault();
+      var mv=function(ev){var dx=ev.clientX-x0,dy=ev.clientY-y0,v=k==="wA"?v0+dx:k==="hE"?v0-dy:v0-dx,
+        lim={wA:[150,r.width-TRSZ.wC-TRSZ.wD-380],wC:[180,r.width-TRSZ.wA-TRSZ.wD-380],wD:[220,r.width-TRSZ.wA-TRSZ.wC-380],hE:[90,r.height-220]}[k];
+        TRSZ[k]=Math.round(Math.max(lim[0],Math.min(Math.max(lim[0],lim[1]),v)));m.style.setProperty("--"+k,TRSZ[k]+"px")};
+      var up=function(){sp.classList.remove("on");sp.removeEventListener("pointermove",mv);sp.removeEventListener("pointerup",up);sp.removeEventListener("pointercancel",up);trLaySave()};
+      sp.addEventListener("pointermove",mv);sp.addEventListener("pointerup",up);sp.addEventListener("pointercancel",up);return}
+    var h=e.target.closest(".trph");
+    if(h){var pn=h.closest(".trpn"),sx=e.clientX,sy=e.clientY,mvd=false,tg=null;
+      try{h.setPointerCapture(e.pointerId)}catch(x){}
+      var mv2=function(ev){if(!mvd&&Math.hypot(ev.clientX-sx,ev.clientY-sy)<6)return;mvd=true;pn.classList.add("drag");
+        var el=document.elementFromPoint(ev.clientX,ev.clientY),t=el&&el.closest?el.closest(".trpn"):null;t=(t&&t!==pn)?t:null;
+        if(t!==tg){if(tg)tg.classList.remove("drop");tg=t;if(tg)tg.classList.add("drop")}};
+      var up2=function(){h.removeEventListener("pointermove",mv2);h.removeEventListener("pointerup",up2);h.removeEventListener("pointercancel",up2);pn.classList.remove("drag");
+        if(tg){tg.classList.remove("drop");var a=pn.dataset.s,b=tg.dataset.s;TRLAY[a]=tg.dataset.p;TRLAY[b]=pn.dataset.p;trLayApply();trLaySave()}};
+      h.addEventListener("pointermove",mv2);h.addEventListener("pointerup",up2);h.addEventListener("pointercancel",up2)}
+  })}
+window.addEventListener("resize",function(){if(TRV&&TRV.style.display!=="none"&&TRV.offsetParent!==null){trTkKey="";if(!trDesk()){$("trP_tk").innerHTML="";$("trP_mk").innerHTML=""}trTabGo(trDesk()?"chart":trTab)}});
 function trSet(){try{localStorage.setItem("vzTr.set",JSON.stringify(TRS))}catch(e){}}
 function trDrSave(){try{localStorage.setItem("vzTr.dr:"+pSym,JSON.stringify(trDR))}catch(e){}}
 function trDrLoad(){try{trDR=JSON.parse(localStorage.getItem("vzTr.dr:"+pSym)||"[]")}catch(e){trDR=[]}if(!Array.isArray(trDR))trDR=[]}
@@ -2635,7 +2701,7 @@ function pEqRender(a){
 function trBuild(){
   TRV=document.createElement("div");TRV.id="vzTr";
   TRV.innerHTML='<div class="trhd"><button type="button" id="trX" aria-label="Back"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><button type="button" id="trSymB" class="trsym"></button><div class="trg"></div><div class="trpr"><b id="trPx">-</b><small id="trChg"></small></div><button type="button" id="trGear" aria-label="Settings">&#9881;</button></div>'
-  +'<div class="trtfw"><div class="trtf" id="trTf"></div><button type="button" id="trFx" class="trfx">fx</button></div><div class="trmain"><div class="trpane on" id="trP_chart"><div class="trtools" id="trTools"></div><div class="trcw"><div id="trChEl"></div><canvas id="trOv"></canvas></div></div><div class="trpane" id="trP_book"></div><div class="trpane" id="trP_pos"></div><div class="trpane" id="trP_acc"></div></div>'
+  +'<div class="trtfw"><div class="trtf" id="trTf"></div><button type="button" id="trFx" class="trfx">fx</button><button type="button" id="trLayR" class="trfx trdk" title="Reset layout">&#8634; Layout</button></div>'+trMainHtml()+''
   +'<div id="trNote" role="status"></div><div class="tract" id="trAct"><button type="button" class="trbl" data-s="buy">Buy / Long</button><button type="button" class="trbs" data-s="sell">Sell / Short</button></div><nav class="trnav" id="trNav"></nav><div class="trsh" id="trSh"><div class="trsb" id="trSb"></div></div>';
   document.body.appendChild(TRV);
   $("trNav").innerHTML=[["chart","Chart"],["book","Book"],["trade","Trade","c"],["pos",L("Posisi","Positions")],["acc",L("Akun","Account")]].map(function(n){return'<button type="button" data-n="'+n[0]+'" class="'+(n[2]||"")+(n[0]==="chart"?" on":"")+'">'+(n[2]?'<b>'+trIcn(n[0],"width:26px;height:26px;margin:0;background:#04140d")+'</b>':trIcn(n[0]))+n[1]+'</button>'}).join("");
@@ -2651,7 +2717,7 @@ function trBuild(){
     trTmp={t:trTool,a:p,b:p};try{ov.setPointerCapture(e.pointerId)}catch(x){}};
   ov.onpointermove=function(e){if(trTmp){var p=trPt(e);if(p)trTmp.b=p}};
   ov.onpointerup=function(){if(!trTmp)return;if(trTmp.t==="m")trRul=trTmp;else{trDR.push(trTmp);trDrSave()}trTmp=null;trTool="cross";trBar()};
-  trBindDrag($("trChEl"));
+  trBindDrag($("trChEl"));trLayBind();
 }
 function trBar(){
   $("trTools").innerHTML=TRTOOLS.map(function(t){return'<button type="button" data-tt="'+t[0]+'" class="'+(trTool===t[0]?"on":"")+(t[0]==="lp"?" up":t[0]==="sp"?" dn":"")+'">'+t[1]+'</button>'}).join("")+"<hr>"
@@ -2671,7 +2737,7 @@ function trOpen(){
   pConnect();pLoadInfo();pLoadAllT(true);
   if(!TRV)trBuild();
   TRV.style.display="flex";document.body.style.overflow="hidden";
-  trDrLoad();trRul=null;trTool="cross";trBar();trTfBar();trHead();trTabGo("chart");trKey="";trCD=[];trLoadCD();
+  trDrLoad();trRul=null;trTool="cross";trBar();trTfBar();trHead();trTkKey="";trLsAt=0;trLayApply();trTabGo("chart");trKey="";trCD=[];trLoadCD();
   clearInterval(trTimer);trTimer=setInterval(trTick,400);
   if(!trRaf){trRaf=true;requestAnimationFrame(trLoop)}
 }
@@ -2713,6 +2779,10 @@ function trTick(){
     if(l[0]===st){try{trCs.update(trCv(l));trVs.update(trVc(l));trIndLive()}catch(e){}}
   }
   trSyncLines(a);
+  if(trDesk()){
+    if(!$("trSrch"))trMkInit();
+    var tkk=pSym+(a.positions[pSym]?1:0)+a.status;if(tkk!==trTkKey||!$("trQ")){trTkKey=tkk;trTicket(trSd||"buy")}
+    if(n-trLsAt>3000&&document.activeElement!==$("trSrch")){trLsAt=n;trList()}}
   if(n-trAt>1000){trAt=n;trRender()}
   if((trTab==="book"||trDesk())&&n-trBkAt>1500){trBkAt=n;trBook()}
 }
@@ -2892,19 +2962,26 @@ function trRender(){
 }
 function trBook(){
   if(trTab!=="book"&&!trDesk())return;var sy=pSym;
-  fetch(PREST+"/v5/market/orderbook?category=linear&symbol="+sy+"&limit=15").then(function(r){return r.json()}).then(function(d){
-    var x=d&&d.result;if(!x||(trTab!=="book"&&!trDesk())||sy!==pSym)return;var dc=PDEC[sy]||2;
-    var row=function(l,c){return l.map(function(v){return'<div class="'+c+'"><span>'+(+v[0]).toFixed(dc)+'</span><span class="trmu">'+v[1]+'</span></div>'}).join("")};
-    $("trP_book").innerHTML='<div class="trbk">'+row((x.a||[]).slice().reverse(),"pdn")+'<div style="padding:8px 0;font-size:18px;font-weight:700">'+$("trPx").textContent+'</div>'+row(x.b||[],"pup")+'</div>'}).catch(function(){})}
+  var ok=function(){return sy===pSym&&(trTab==="book"||trDesk())};
+  Promise.all([
+    fetch(PREST+"/v5/market/orderbook?category=linear&symbol="+sy+"&limit=15").then(function(r){return r.json()}).catch(function(){return null}),
+    fetch(PREST+"/v5/market/recent-trade?category=linear&symbol="+sy+"&limit=30").then(function(r){return r.json()}).catch(function(){return null})
+  ]).then(function(R){
+    var x=R[0]&&R[0].result,t=R[1]&&R[1].result&&R[1].result.list;if(!ok()||!x)return;var dc=PDEC[sy]||2,mx=0;
+    [].concat(x.a||[],x.b||[]).forEach(function(v){if(+v[1]>mx)mx=+v[1]});
+    var row=function(l,c,rgb){return l.map(function(v){var w=mx>0?Math.min(100,v[1]/mx*100):0;return'<div class="'+c+'" style="background:linear-gradient(to left,'+rgb+' '+w+'%,transparent '+w+'%)"><span>'+(+v[0]).toFixed(dc)+'</span><span class="trmu">'+v[1]+'</span></div>'}).join("")};
+    var tr=(t||[]).slice(0,30).map(function(z){return'<div class="'+(z.side==="Buy"?"pup":"pdn")+'"><span>'+(+z.price).toFixed(dc)+'</span><span class="trmu">'+z.size+'</span><span class="trmu">'+new Date(+z.time).toTimeString().slice(0,8)+'</span></div>'}).join("");
+    var el=$("trP_book");if(!el)return;
+    el.innerHTML='<div class="trbk">'+row((x.a||[]).slice().reverse(),"pdn","rgba(240,68,82,.18)")+'<div class="trmid">'+$("trPx").textContent+'</div>'+row(x.b||[],"pup","rgba(34,197,94,.18)")+'</div>'+(tr?'<h4 class="trh4">'+L("Transaksi terbaru","Recent trades")+'</h4><div class="trbk">'+tr+'</div>':"")}).catch(function(){})}
 function trTicket(sd){
   var a=trAcc();if(!a)return;trSd=sd;trTy="market";
   var mx=pLevMax(pSym),lk=!!a.positions[pSym],lev=Math.min(a.lev[pSym]||PCFG.defaultLev,mx),st=QSTEP[pSym],mq=PMINQ[pSym]||st,bs=esc(pBase(pSym));
-  trSheet('<h3 class="'+(sd==="buy"?"pup":"pdn")+'">'+(sd==="buy"?"Long ":"Short ")+bs+'</h3><div class="trseg" id="trTy"><button type="button" data-ty="market" class="on">Market</button><button type="button" data-ty="limit">Limit</button></div>'
+  trTkOut((trDesk()?"":'<h3 class="'+(sd==="buy"?"pup":"pdn")+'">'+(sd==="buy"?"Long ":"Short ")+bs+'</h3>')+'<div class="trseg" id="trTy"><button type="button" data-ty="market" class="on">Market</button><button type="button" data-ty="limit">Limit</button></div>'
   +'<label>Leverage <b id="trLv" style="color:#F5F5F5">'+lev+'x</b>'+(lk?' <small>('+L("terkunci, ada posisi","locked, position open")+')</small>':"")+'<input id="trLev" type="range" min="1" max="'+mx+'" value="'+lev+'"'+(lk?" disabled":"")+'></label>'
   +'<div class="trlb"><div class="trrw"><span>'+L("Jumlah","Size")+'</span><div class="trseg" id="trUn" style="margin:0 0 6px"><button type="button" data-un="coin" class="'+(TRS.un==="usdt"?"":"on")+'">'+bs+'</button><button type="button" data-un="usdt" class="'+(TRS.un==="usdt"?"on":"")+'">USDT</button></div></div><input id="trQ" type="number" inputmode="decimal" min="0" step="any" placeholder="'+(TRS.un==="usdt"?"0.00":mq)+'"></div>'+'<div class="trch">'+[25,50,75,100].map(function(p){return'<button type="button" data-pct="'+p+'">'+p+'%</button>'}).join("")+'</div>'
   +'<label id="trPxL" style="display:none">'+L("Harga limit","Limit price")+'<input id="trPx2" type="number" inputmode="decimal" step="any"></label>'
   +'<div class="trr2"><label>Stop loss<input id="trSl" type="number" inputmode="decimal" step="any"></label><label>Take profit<input id="trTp" type="number" inputmode="decimal" step="any"></label></div>'
-  +'<label style="display:flex;gap:8px;align-items:center"><input id="trRo" type="checkbox">Reduce-only</label><p class="trmu" id="trSum"></p><p class="pdn" id="trMsg"></p><button type="button" class="trgo '+(sd==="buy"?"trbl":"trbs")+'" id="trGo">'+(sd==="buy"?"Long ":"Short ")+bs+'</button>');
+  +'<label style="display:flex;gap:8px;align-items:center"><input id="trRo" type="checkbox">Reduce-only</label><p class="trmu" id="trSum"></p><p class="pdn" id="trMsg"></p>'+(trDesk()?'<div class="trgb"><button type="button" class="trgo trbl" data-go="buy">Buy / Long</button><button type="button" class="trgo trbs" data-go="sell">Sell / Short</button></div>':'<button type="button" class="trgo '+(sd==="buy"?"trbl":"trbs")+'" id="trGo">'+(sd==="buy"?"Long ":"Short ")+bs+'</button>'));
   ["trQ","trLev","trPx2"].forEach(function(i){$(i).oninput=trSum});trSum();
 }
 function trPxNow(){var b=BK[pSym];if(trTy==="limit")return parseFloat($("trPx2").value)||0;return b?(trSd==="buy"?b.ask:b.bid):0}
@@ -2924,7 +3001,7 @@ function trSubmit(){
   if(!a.positions[pSym]){var lr=PE.setLeverage(a,pSym,+$("trLev").value||PCFG.defaultLev,PCFG);if(!lr.ok)return bad(perr(lr.error))}
   var r=PE.placeOrder(a,o,BK,PCFG,n);if(!r.ok)return bad(perr(r.error));
   pLog(a,{symbol:o.symbol,side:o.side,type:o.type,qty:o.qty,price:r.filled?r.price:o.price,status:r.filled?"filled":"placed"});
-  pSave();pSig="";trPSig="";trShut();trNote(r.filled?L("Terisi @ ","Filled @ ")+f2(r.price):L("Limit order dipasang.","Limit order placed."));trRender();
+  pSave();pSig="";trPSig="";m.textContent="";trShut();trNote(r.filled?L("Terisi @ ","Filled @ ")+f2(r.price):L("Limit order dipasang.","Limit order placed."));trRender();
 }
 function trSettings(){
   var t=function(k,l){return'<div class="trrow"><span>'+l+'</span><button type="button" class="trtg '+(TRS[k]?"on":"")+'" data-k="'+k+'"></button></div>'},
@@ -2935,7 +3012,7 @@ function trList(){
   var e=$("trList");if(!e)return;var q=String(($("trSrch")||{}).value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
   var rows=PSYMS.filter(function(s){return(!q||s.indexOf(q)>-1)&&(pCatSel==="all"||q||pCatOf(s)===pCatSel)});
   rows.sort(function(x,y){var d=((ALLT[y]||{}).vol||0)-((ALLT[x]||{}).vol||0);return d||(x<y?-1:1)});
-  e.innerHTML=rows.slice(0,100).map(function(s){var t=ALLT[s],d=PDEC[s]||2;return'<button type="button" class="trpk" data-ps="'+s+'"><span>'+trIco(pBase(s))+esc(pBase(s))+'</span><span class="trmu">'+pLevMax(s)+'x</span><span>'+(t&&t.last>0?t.last.toFixed(Math.min(d,8)):"-")+'</span><span class="'+(t?pc(t.chg):"")+'">'+(t&&isFinite(t.chg)?(t.chg>0?"+":"")+(t.chg*100).toFixed(2)+"%":"-")+'</span></button>'}).join("")||'<p class="trmu">'+L("Koin tidak ditemukan.","No coin found.")+'</p>'}
+  e.innerHTML=rows.slice(0,100).map(function(s){var t=ALLT[s],d=PDEC[s]||2;return'<button type="button" class="trpk'+(s===pSym?" on":"")+'" data-ps="'+s+'"><span>'+trIco(pBase(s))+esc(pBase(s))+'</span><span class="trmu">'+pLevMax(s)+'x</span><span>'+(t&&t.last>0?t.last.toFixed(Math.min(d,8)):"-")+'</span><span class="'+(t?pc(t.chg):"")+'">'+(t&&isFinite(t.chg)?(t.chg>0?"+":"")+(t.chg*100).toFixed(2)+"%":"-")+'</span></button>'}).join("")||'<p class="trmu">'+L("Koin tidak ditemukan.","No coin found.")+'</p>'}
 function trPicker(){
   pLoadAllT(true);
   trSheet('<input id="trSrch" type="search" autocomplete="off" placeholder="'+L("Cari koin, mis. PEPE, SOL, XAU","Search coin, e.g. PEPE, SOL, XAU")+'"><div class="trch">'+PCATS.map(function(c){return'<button type="button" data-cat="'+c[0]+'" class="'+(c[0]===pCatSel?"on":"")+'">'+L(c[1],c[2])+'</button>'}).join("")+'</div><div id="trList"></div>');
@@ -2944,7 +3021,7 @@ function trClick(e){
   if(e.target.id==="trSh"){trShut();return}
   var b=e.target.closest("button");if(!b)return;var a=trAcc(),d=b.dataset,id=b.id;
   if(id==="trX")return trClose();
-  if(id==="trSymB")return trPicker();
+  if(id==="trSymB"){if(trDesk()&&$("trSrch")){$("trSrch").focus();return}return trPicker()}if(id==="trLayR")return trLayReset();if(d.go){trSd=d.go;return trSubmit()}
   if(id==="trGear")return trSettings();
   if(id==="trFx")return trIndSheet();
   if(d.it){trNew.t=d.it;document.querySelectorAll("#trItp button").forEach(function(x){x.classList.toggle("on",x===b)});return}
@@ -2962,8 +3039,8 @@ function trClick(e){
   if(b.parentNode&&b.parentNode.id==="trAct"){trTicket(d.s);return}
   if(d.k&&b.classList.contains("trtg")){TRS[d.k]=!TRS[d.k];trSet();trMk();trSettings();return}
   if(d.k&&d.v){TRS[d.k]=d.v;trSet();trMk();trSettings();return}
-  if(d.cat){pCatSel=d.cat;document.querySelectorAll("#trSb [data-cat]").forEach(function(x){x.classList.toggle("on",x.dataset.cat===pCatSel)});trList();return}
-  if(d.ps){pSym=d.ps;trShut();trDrLoad();trRul=null;trKey="";trCD=[];trHead();pSync();trLoadCD();$("trPx").textContent="-";$("trChg").textContent="";return}
+  if(d.cat){pCatSel=d.cat;document.querySelectorAll("#vzTr [data-cat]").forEach(function(x){x.classList.toggle("on",x.dataset.cat===pCatSel)});trList();return}
+  if(d.ps){pSym=d.ps;trShut();trDrLoad();trRul=null;trKey="";trCD=[];trHead();pSync();trLoadCD();$("trPx").textContent="-";$("trChg").textContent="";trTkKey="";trList();return}
   if(d.un){if(d.un===TRS.un)return;var px0=trPxNow(),v0=parseFloat($("trQ").value);
     if(v0>0&&px0>0){$("trQ").value=d.un==="usdt"?Math.round(v0*px0*100)/100:trQRound(v0/px0)}
     TRS.un=d.un;trSet();document.querySelectorAll("#trUn button").forEach(function(x){x.classList.toggle("on",x===b)});$("trQ").placeholder=d.un==="usdt"?"0.00":(PMINQ[pSym]||QSTEP[pSym]);trSum();return}
