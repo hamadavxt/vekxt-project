@@ -2304,7 +2304,7 @@ function dash(){
     if(!idf||!sf){m.textContent=t("kycEFile");return}
     btn.disabled=true;m.textContent=t("kycUp");
     Promise.all([prepFile(idf,false),prepFile(sf,false)]).then(function(f){
-      return Promise.all([putKyc("id",f[0]),putKyc("bank",f[1])]);
+      return Promise.all([putKyc("id",f[0]),putKyc("statement",f[1])]);
     }).then(function(p){
       var current=fb&&fb.auth().currentUser;
       if(!current)throw new Error("auth");
@@ -2312,7 +2312,7 @@ function dash(){
         return fetch(KYC_API.replace(/\/$/,"")+"/kyc/submit",{
           method:"POST",
           headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
-          body:JSON.stringify({docType:dt,idPath:p[0],bankPath:p[1],selfiePath:p[1]})
+          body:JSON.stringify({docType:dt,idPath:p[0],statementPath:p[1]})
         });
       }).then(function(r){return r.json().then(function(d){if(!r.ok||!d.success)throw new Error(d.error||"submit");return d;});});
     }).then(function(){
