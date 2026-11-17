@@ -2080,7 +2080,7 @@ function viewAff(){
 function lbType(k){return k==="perp"?"Perps":k==="fut"?"Futures":k==="vt"?"CFD Trader":"CFD MT5"}
 function lbRow(r,me){
   var rk=r.rank,col=rk===1?"#F5B84B":rk===2?"#C0C6CF":rk===3?"#CD7F32":"var(--muted)",up=r.pct>=0,ct=r.c?esc(r.c)+" \u00b7 ":"";
-  return'<div class="lbr'+(me?" me":"")+'"><span class="lbn" style="color:'+col+'">'+rk+'</span><div><b>'+esc(r.n)+'</b><small>'+ct+lbType(r.k)+" \u00b7 "+esc(r.p)+" "+kfmt(r.s)+(r.k==="perp"?" USDT":"")+(r.f?" \u00b7 Funded":"")+'</small></div><strong class="'+(up?"up":"dn")+'">'+(up?"+":"")+r.pct.toFixed(2)+'%</strong></div>';
+  return'<div class="lbr'+(me?" me":"")+'"><span class="lbn" style="color:'+col+'">'+rk+'</span><div><b>'+esc(r.n)+'</b><small>'+ct+lbType(r.k)+" \u00b7 "+esc(r.p)+" "+kfmt(r.s)+(r.k==="perp"?" USDT":"")+(r.f?" \u00b7 Funded":"")+'</small></div><strong class="'+(up?"up":"dn")+'">'+(up?"+":"")+r.pct.toFixed(2)+'%<small style="display:block;text-align:right;font-weight:600">'+(up?"+":"-")+Math.abs(Math.round(r.s*r.pct/100)).toLocaleString("en-US")+(r.k==="perp"?" USDT":" USD")+'</small></strong></div>';
 }
 function viewLb(){
   if(lbState==="idle"||lbState==="loading")return'<div class="lg-card"><b>'+t("lbT")+'</b><p style="margin-top:8px">'+t("lbLoad")+'</p></div>';
