@@ -329,3 +329,9 @@ html[data-mode="fut"][data-theme="light"] .lg-dash .prow:hover{background:#EAF1F
 html[data-mode="fut"][data-theme="light"] .lg-lang,html[data-mode="fut"][data-theme="light"] .lg-btn.ghost,html[data-mode="fut"][data-theme="light"] .lg-tabs{border-color:var(--line)}
 html[data-mode="fut"][data-theme="light"] .lbr.me{background:rgba(37,99,235,.10)}
 html[data-mode="fut"][data-theme="light"] .lg-dash .acc small,html[data-mode="fut"][data-theme="light"] .lg-dash .acc-hint{color:var(--muted)}
+
+.lg-dash .aff-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:0 0 16px}
+.lg-dash .aff-grid>div{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--surface);min-width:0}
+.lg-dash .aff-grid small{display:block;text-transform:uppercase;letter-spacing:.04em;font-size:12px;color:var(--muted)}
+.lg-dash .aff-grid strong{display:block;font-size:22px;letter-spacing:-.02em;margin-top:6px;word-break:break-word}
+@media(min-width:760px){.lg-dash .aff-grid{grid-template-columns:repeat(3,1fr)}}
