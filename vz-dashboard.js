@@ -585,7 +585,8 @@ function pc(v){return v>0?"pup":v<0?"pdn":""}
 function modeLinks(){return'<a href="#" data-pm="cfd" aria-pressed="'+(PM==="cfd")+'">CFD</a><a href="#" data-pm="perp" aria-pressed="'+(PM==="perp")+'">Perps</a><a href="#" data-pm="fut" aria-pressed="'+(PM==="fut")+'">Futures</a>'}
 function modeSw(){return'<div class="modesw" role="group" aria-label="Produk">'+modeLinks()+'</div>'}
 function paintMode(){var e=$("lgMode");if(!e)return;e.style.display=user?"none":"";e.innerHTML=modeLinks()}
-function setMode(m){if(m===PM)return;PM=m;try{localStorage.setItem("vzMode",m)}catch(e){}var h=document.documentElement;if(m==="perp"||m==="fut")h.setAttribute("data-mode",m);else h.removeAttribute("data-mode");selAcc=null;selP=null;selV=null;paintMode();if(user)dash()}
+function setMode(m){if(m===PM)return;PM=m;try{localStorage.setItem("vzMode",m)}catch(e){}var h=document.documentElement;if(m==="perp"||m==="fut")h.setAttribute("data-mode",m);else h.removeAttribute("data-mode");selAcc=null;selP=null;selV=null;try{history.replaceState(null,"","#"+m)}catch(e){}paintMode();if(user)dash()}
+window.addEventListener("hashchange",function(){var h=location.hash.slice(1);if(h==="cfd"||h==="perp"||h==="fut")setMode(h)});
 document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("[data-pm]");if(!a)return;e.preventDefault();setMode(a.getAttribute("data-pm"))});
 /* --- penyimpanan akun uji (browser ini) --- */
 function pKey(){return"vzPerp:"+((user&&(user.uid||user.email))||"x")}
@@ -2377,7 +2378,7 @@ function dash(){
     }).catch(function(){affWdBusy=false;affWdMsg=t("affE_x");dash()});
   };
 }
-function vzLangCss(){if($("vzLangCss"))return;var st=document.createElement("style");st.id="vzLangCss";st.textContent='.lg-box.wide{max-width:980px!important;--w:980px!important}html[dir="rtl"] #vzTr,html[dir="rtl"] #vtApp,html[dir="rtl"] #pTerm .lg-card canvas,html[dir="rtl"] .fT{direction:ltr}';document.head.appendChild(st)}
+function vzLangCss(){if($("vzLangCss"))return;var st=document.createElement("style");st.id="vzLangCss";st.textContent='.lg-box.wide{max-width:980px!important;--w:980px!important}@media (min-width:1000px){.lg-box.wide{max-width:1240px!important;--w:1240px!important}}@media (min-width:1500px){.lg-box.wide{max-width:1340px!important;--w:1340px!important}}html[dir="rtl"] #vzTr,html[dir="rtl"] #vtApp,html[dir="rtl"] #pTerm .lg-card canvas,html[dir="rtl"] .fT{direction:ltr}';document.head.appendChild(st)}
 function paint(){paintMode();vzLangCss();
   document.documentElement.lang=lang;document.documentElement.setAttribute("dir",lang==="ar"?"rtl":"ltr");
   $("lgBox").className="lg-box"+(user?" wide":"");
