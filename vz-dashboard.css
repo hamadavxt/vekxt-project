@@ -335,3 +335,15 @@ html[data-mode="fut"][data-theme="light"] .lg-dash .acc small,html[data-mode="fu
 .lg-dash .aff-grid small{display:block;text-transform:uppercase;letter-spacing:.04em;font-size:12px;color:var(--muted)}
 .lg-dash .aff-grid strong{display:block;font-size:22px;letter-spacing:-.02em;margin-top:6px;word-break:break-word}
 @media(min-width:760px){.lg-dash .aff-grid{grid-template-columns:repeat(3,1fr)}}
+
+/* ===== desktop dashboard: lebar sama di semua mode + kartu 2 kolom ===== */
+@media (min-width:1000px){
+  .lg-box.wide,html[data-mode="perp"] .lg-box.wide,html[data-mode="fut"] .lg-box.wide{max-width:1240px;--w:1240px}
+  #dBody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;align-items:start}
+  #dBody>*{grid-column:1 / -1;min-width:0}
+  #dBody>.lg-card,#dBody>.acc,#dBody>.accv{grid-column:auto}
+  #dBody>.lg-card:has(.eqsvg),#dBody>.lg-card:has(.cal),#dBody>.lg-card:has(table),#dBody>.lg-card:has(.hist),#dBody>.lg-card:has(#pTerm),#dBody>.lg-card:has(.lbr){grid-column:1 / -1}
+  #dBody>.aff-grid{grid-template-columns:repeat(3,1fr)}
+  .lg-dash .dh h1{font-size:34px}
+}
+@media (min-width:1500px){.lg-box.wide,html[data-mode="perp"] .lg-box.wide,html[data-mode="fut"] .lg-box.wide{max-width:1340px;--w:1340px}}
