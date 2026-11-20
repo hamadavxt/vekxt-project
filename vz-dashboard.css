@@ -347,3 +347,11 @@ html[data-mode="fut"][data-theme="light"] .lg-dash .acc small,html[data-mode="fu
   .lg-dash .dh h1{font-size:34px}
 }
 @media (min-width:1500px){.lg-box.wide,html[data-mode="perp"] .lg-box.wide,html[data-mode="fut"] .lg-box.wide{max-width:1340px;--w:1340px}}
+/* ===== desktop: chart & tombol tidak raksasa ===== */
+@media (min-width:1000px){
+  .lg-box.wide .eqsvg{width:100%;height:auto;max-height:260px}
+  .lg-box.wide .lg-btn:not(.pb-long):not(.pb-short){display:inline-block;width:auto;min-width:170px;max-width:100%;padding:10px 24px;font-size:14px}
+  .lg-box.wide .lg-card form .lg-btn,.lg-box.wide .lg-card .lg-btn+.lg-btn{margin-right:8px}
+  .lg-box.wide .lg-tabs button{font-size:14px;padding:10px 14px}
+  .lg-box.wide .lg-card{padding:20px 22px}
+}
