@@ -355,3 +355,5 @@ html[data-mode="fut"][data-theme="light"] .lg-dash .acc small,html[data-mode="fu
   .lg-box.wide .lg-tabs button{font-size:14px;padding:10px 14px}
   .lg-box.wide .lg-card{padding:20px 22px}
 }
+
+@media (min-width:1000px){#dBody>.lg-btn,#dBody>button.lg-btn,#dBody>a.lg-btn{justify-self:start;align-self:start;width:auto!important}}
