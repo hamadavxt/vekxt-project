@@ -2276,7 +2276,7 @@ function dash(){
   document.querySelectorAll("#wdNs button").forEach(function(b){b.onclick=function(){wdNet=b.dataset.n;dash()}});
   var wf=$("wdForm");
   if(wf)wf.onsubmit=function(e){
-    e.preventDefault();var m=$("wdMsg");if(wdBusy){if(Date.now()-(window.__wdT||0)>15000){wdBusy=false}else{m.textContent=lang==="id"?"Sedang diproses, tunggu sebentar...":"Processing, please wait...";return}}window.__wdT=Date.now();var amt=parseFloat($("wdAmt").value),rec={amt:amt,method:wdM,status:"pending",email:user.email};try{
+    e.preventDefault();var wf=e.currentTarget||e.target;var m=$("wdMsg")||{};if(wdBusy){if(Date.now()-(window.__wdT||0)>15000){wdBusy=false}else{m.textContent=lang==="id"?"Sedang diproses, tunggu sebentar...":"Processing, please wait...";return}}window.__wdT=Date.now();var amt=parseFloat($("wdAmt").value),rec={amt:amt,method:wdM,status:"pending",email:user.email};try{
     if(!(amt>0)){m.textContent=t("wdBad");return}
     if(amt<WD_MIN){m.textContent=t("wdMin");return}
     if(wdState!=="ok"){m.textContent=lang==="id"?"Data penarikan belum termuat. Muat ulang halaman lalu coba lagi.":"Withdrawal data not loaded. Reload the page and try again.";wdState="idle";dash();return}
