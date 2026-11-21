@@ -592,7 +592,10 @@ document.addEventListener("click",function(e){var a=e.target.closest&&e.target.c
 function pKey(){return"vzPerp:"+((user&&(user.uid||user.email))||"x")}
 function pLoadAll(){var k=pKey();if(pKeyLoaded===k)return;pKeyLoaded=k;pBootSt="idle";pFsState="idle";pPushed={};PEN=[];PENst="idle";try{PERPS=JSON.parse(localStorage.getItem(k)||"[]")}catch(e){PERPS=[]}if(!Array.isArray(PERPS))PERPS=[];if(selP!==null&&!PERPS[selP])selP=null}
 function pSaveLocal(){try{localStorage.setItem(pKey(),JSON.stringify(PERPS))}catch(e){}}
-function pSave(){pSavedAt=Date.now();pSaveLocal();pPush(false)}
+function vzBreachMail(){if(!CFG||!user||!ACC_API)return;PERPS.forEach(function(a){if(a.status==="active"){a._act=1;return}
+  if(a.status!=="breached"||!a._act||a._bm)return;a._bm=1;
+  apiPost({action:"breach_mail",accId:a.id,program:a.program,size:a.size,reason:a.reason||""},function(d){if(!(d&&d.ok))a._bm=0;pSaveLocal()},function(){a._bm=0})})}
+function pSave(){pSavedAt=Date.now();pSaveLocal();pPush(false);try{vzBreachMail()}catch(e){}}
 /* --- sinkron ke Firebase (Firestore koleksi "perps", satu dokumen per akun: uid_id) --- */
 var pFsState="idle",pPushed={},pPushT=0,pBootSt="idle",pClaiming=false;
 function pFsOn(){return !!(CFG&&fs&&user&&user.uid)}
