@@ -2055,6 +2055,15 @@ function viewProfForm(){
   var note=(CFG&&prof&&!profDone(prof))?'<div class="lg-msg">'+t("needAddr")+'</div>':"";
   return'<div class="lg-card">'+note+'<form id="pfForm" novalidate="novalidate"><label>'+t("name")+'<input id="pfName" type="text" value="'+esc(user.name)+'" autocomplete="name"/></label><label>'+t("email")+'<input type="email" value="'+esc(user.email)+'" disabled="disabled"/></label><label>'+t("pfAddr")+'<textarea id="pfAddr" rows="3" autocomplete="street-address">'+esc(p.address)+'</textarea></label><label>'+t("country")+'<input id="pfCountry" type="text" value="'+esc(p.country)+'" autocomplete="country-name"/></label><label>'+t("prov")+'<input id="pfProv" type="text" value="'+esc(p.province)+'" autocomplete="address-level1"/></label><label>'+t("city")+'<input id="pfCity" type="text" value="'+esc(p.city)+'" autocomplete="address-level2"/></label><label>'+t("phone")+'<input id="pfPhone" type="tel" inputmode="tel" value="'+esc(p.phone)+'" autocomplete="tel"/></label><label>'+t("pfTg")+'<input id="pfTg" type="text" value="'+esc(p.tg)+'" placeholder="@username" autocomplete="off"/></label><div class="lg-msg" id="pfMsg" role="alert"></div><button class="lg-btn" type="submit">'+t("pfSave")+'</button></form></div>';
 }
+/* email verifikasi / reset: coba lewat worker (HTML Vekxt Zero via Resend); kalau belum dikonfigurasi, pakai email bawaan Firebase */
+function vzSendVerify(u){
+  if(!ACC_API)return u.sendEmailVerification();
+  return vzCall({action:"verify_mail"}).then(function(r){return r.json()}).then(function(d){if(d&&d.ok)return;return u.sendEmailVerification()},function(){return u.sendEmailVerification()});
+}
+function vzSendReset(email){
+  if(!ACC_API)return fb.auth().sendPasswordResetEmail(email);
+  return fetch(ACC_API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"pw_reset",target:email})}).then(function(r){return r.json().catch(function(){return{}})}).then(function(d){if(d&&d.ok)return;return fb.auth().sendPasswordResetEmail(email)},function(){return fb.auth().sendPasswordResetEmail(email)});
+}
 function apiPost(extra,ok,fail){
   if(!ACC_API){fail();return}
   var go=function(tok){vzCall(extra).then(function(r){return r.json()}).then(function(d){if(!d||d.error)throw d||{};ok(d)}).catch(function(){fail()})};
@@ -2268,7 +2277,7 @@ function dash(){
   var vd=$("verDone");
   if(vd)vd.onclick=function(){var cu=fb.auth().currentUser;cu.reload().then(function(){return cu.getIdToken(true)}).then(function(){user.verified=cu.emailVerified;if(user.verified){accState="idle";dash();loadAccounts()}else{$("verMsg").textContent=t("verNot")}}).catch(function(){$("verMsg").textContent=t("eGen")})};
   var vr=$("verResend");
-  if(vr)vr.onclick=function(){fb.auth().currentUser.sendEmailVerification().then(function(){$("verMsg").textContent=t("verSent")}).catch(function(){$("verMsg").textContent=t("eGen")})};
+  if(vr)vr.onclick=function(){vzSendVerify(fb.auth().currentUser).then(function(){$("verMsg").textContent=t("verSent")}).catch(function(){$("verMsg").textContent=t("eGen")})};
   var hm=$("histMore");if(hm)hm.onclick=function(){histN+=20;dash()};
   var ar=$("accRetry");if(ar)ar.onclick=function(){accState="idle";loadAccounts()};
   var cpv=$("calPrev");
@@ -2427,7 +2436,7 @@ function fbAuth(m,name,email,pass,addr,loc){
     signingUp=true;
     return a.createUserWithEmailAndPassword(email,pass).then(function(c){
       return c.user.updateProfile({displayName:name}).then(function(){
-        c.user.sendEmailVerification().catch(function(){});
+        vzSendVerify(c.user).catch(function(){});
         var pd=Object.assign({name:name,email:email,address:addr},loc||{});return saveProfile(c.user.uid,pd).then(function(){prof=Object.assign({},pd)},function(){prof=Object.assign({},pd)}).then(function(){return{name:name,email:email,uid:c.user.uid,verified:false}});
       });
     }).then(function(u){signingUp=false;return u},function(e){signingUp=false;throw e});
@@ -2460,7 +2469,7 @@ $("lgForgot").onclick=function(){
   msg("");var email=$("fEmail").value.trim().toLowerCase();
   if(!CFG){msg("resetDemo");return}
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){msg("eEmail");return}
-  fb.auth().sendPasswordResetEmail(email).then(function(){msg("reset")}).catch(function(err){msg(errKey(err))});
+  vzSendReset(email).then(function(){msg("reset")}).catch(function(err){msg(errKey(err))});
 };
 $("lgGoogle").onclick=function(){
   msg("");
