@@ -1498,7 +1498,7 @@ function vxIndSheet(){
     if(b.id==="vxX")d.remove()}}
 function vxCss(){
   if($("vxCss"))return;var s=document.createElement("style");s.id="vxCss";
-  s.textContent="#vxOv{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}#vxOv.on{pointer-events:auto;cursor:crosshair}"
+  s.textContent="#vxIxS{z-index:60}#vtCh{isolation:isolate;z-index:0}#vxOv{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}#vxOv.on{pointer-events:auto;cursor:crosshair}"
    +".vxPal{position:absolute;left:6px;top:8px;z-index:4;display:none;flex-direction:column;gap:2px;padding:4px;background:rgba(15,17,22,.94);border:1px solid #292B32;border-radius:10px;max-height:calc(100% - 16px);overflow-y:auto}.vxPal.on{display:flex}"
    +".vxPal button{width:34px;height:34px;border-radius:8px;background:none;border:0;color:#A1A1AA;font-size:15px;cursor:pointer;line-height:1;padding:0}.vxPal button.on{background:#292B32;color:#fff}.vxPal button.up{color:#22C55E}.vxPal button.dn{color:#F04452}.vxPal hr{width:22px;border:0;border-top:1px solid #292B32;margin:3px auto}"
    +".vxB{background:none;border:0;color:var(--mu);font-size:13px;font-weight:700;padding:4px 9px;border-radius:8px;cursor:pointer;flex:none}.vxB.on{color:var(--ac);background:rgba(255,255,255,.06)}";
@@ -1906,10 +1906,10 @@ function fuTrade(a){
    +'<div class="fPx"><b data-p="'+i.id+'">&mdash;</b><span data-c="'+i.id+'"></span></div>'
    +'<div class="fHL"><small>H <b data-hi="'+i.id+'">&mdash;</b></small><small>L <b data-lo="'+i.id+'">&mdash;</b></small><small>'+L("Tick","Tick")+' <b>'+i.tick+' = $'+fuTv(i)+'</b></small></div><span class="vtTag" data-m="'+i.id+'"></span>'
    +'<div class="fAct"><button type="button" id="fBtnL" class="fIb" title="'+L("Daftar kontrak","Contract list")+'">☰</button><button type="button" id="fBtnR" class="fIb" title="'+L("Tiket order","Order ticket")+'">▤</button><button type="button" id="vtCfgB" class="fIb" title="'+L("Pengaturan chart","Chart settings")+'">&#9881;</button><button type="button" id="fBtnT" class="fIb fOrdB">Order</button><button type="button" id="fBtnFull" class="fIb" title="'+L("Perluas chart","Expand chart")+'">⤢</button></div></div>';
-  var tfs='<div class="vtCh fTf">'+VTF.map(function(f,k){return'<button type="button" data-tf="'+k+'" class="'+(VT.tf===k?"on":"")+'">'+f[1]+'</button>'}).join("")+'</div>';
+  var tfs='<div class="vtCh fTf">'+VTF.map(function(f,k){return'<button type="button" data-tf="'+k+'" class="'+(VT.tf===k?"on":"")+'">'+f[1]+'</button>'}).join("")+'<button type="button" class="vxB" id="vxFx" title="Indicators">fx</button><button type="button" class="vxB" id="vxTl" title="Drawing tools">&#9998;</button></div>';
   return'<div class="fT'+(FU.full?" full":"")+(FU.lc?" lc":"")+(FU.rc?" rc":"")+'" id="fT" style="--fh:'+fuFh()+'px">'
    +'<aside class="fMk">'+fuMkHtml()+'</aside>'
-   +'<section class="fMain">'+hd+tfs+'<div class="fPs'+(a.positions[VT.sym]?" on":"")+'" id="fPs">'+fuPs(a)+'</div><div class="fChw"><div id="vtCh"></div></div>'
+   +'<section class="fMain">'+hd+tfs+'<div class="fPs'+(a.positions[VT.sym]?" on":"")+'" id="fPs">'+fuPs(a)+'</div><div class="fChw"><div id="vtCh"></div><canvas id="vxOv"></canvas><div class="vxPal" id="vxPal"></div></div>'
    +'<div class="fSplit" id="fSplit" role="separator" aria-orientation="horizontal" tabindex="0" title="'+L("Tarik untuk ubah tinggi chart (klik dua kali: reset)","Drag to resize the chart (double-click: reset)")+'"><i></i></div>'
    +'<div class="fSt"><div class="vtStops" id="vtStops"></div><div class="vtHint" id="vtHint"></div><div id="vtNote" class="fNote"></div></div>'
    +'<div class="fBot" id="fBot">'+fuBotInner(a)+'</div></section>'
@@ -2049,7 +2049,7 @@ function fuBindSplit(){
 function fuBind(a){
   var B=$("vtBd");if(B){B.onclick=fuClick;B.oninput=fuInput}
   var bd=$("fTkBd");if(bd)bd.onclick=function(){fuTk(false)};
-  if(VT.tab==="trade"){fuBindSplit();var fb=$("fBtnFull");if(fb&&FU.full)fb.textContent="⤡";vtStopsUI()}}
+  if(VT.tab==="trade"){vxBind();fuBindSplit();var fb=$("fBtnFull");if(fb&&FU.full)fb.textContent="⤡";vtStopsUI()}}
 document.addEventListener("keydown",function(e){if(e.key==="Escape"&&FU.full&&VT.on){fuSetFull(false)}});
 var FUCSS=[
 "#vtApp.fut{--ac:#105BFF;--ac2:#5C93FF}",
@@ -2801,7 +2801,7 @@ var TRCSS='#vzTr{position:fixed;inset:0;z-index:300;background:#080A0D;color:#F5
 +'.trtfw{display:flex;align-items:center;border-bottom:1px solid var(--ln)}.trtf{flex:1;min-width:0;display:flex;gap:2px;padding:6px 8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}.trtf::-webkit-scrollbar{display:none}.trtf button{flex:none;white-space:nowrap;min-width:42px;padding:7px 10px!important;border-radius:6px;color:var(--mu);font-weight:600;text-align:center}.trfx{flex:none;padding:8px 14px!important;font-weight:700;color:var(--mu);border-left:1px solid var(--ln)!important;font-style:italic}.trtools button.up{color:#22C55E}.trtools button.dn{color:#F04452}.trsw{width:30px;height:30px;border-radius:50%!important;padding:0!important;border:2px solid transparent!important}.trsw.on{border-color:#fff!important}.trtf button.on{background:var(--sf)!important;color:#F5F5F5}'
 +'.trmain{flex:1;min-height:0;position:relative}.trpane{position:absolute;inset:0;display:none;overflow:auto;padding:12px}.trpane.on{display:block}#trP_chart{padding:0}#trP_chart.on{display:flex}'
 +'.trtools{width:44px;border-right:1px solid var(--ln);display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;overflow-y:auto}.trtools button{width:36px;height:36px;border-radius:8px;color:var(--mu);font-size:16px}.trtools button.on{background:var(--sf)!important;color:#D23A00}.trtools hr{width:24px;border:0;border-top:1px solid var(--ln);margin:4px 0}'
-+'.trcw{flex:1;position:relative;min-width:0}#trChEl,#trOv{position:absolute;inset:0;width:100%;height:100%}#trOv{pointer-events:none;touch-action:none}#trOv.on{pointer-events:auto}'
++'.trcw{flex:1;position:relative;min-width:0}#trChEl,#trOv{position:absolute;inset:0;width:100%;height:100%}#trChEl{z-index:0;isolation:isolate}#trOv{z-index:5;pointer-events:none;touch-action:none}#trOv.on{pointer-events:auto}'
 +'.tract{display:flex;gap:10px;padding:8px 12px;border-top:1px solid var(--ln)}.tract button,.trgo{flex:1;padding:12px!important;border-radius:10px;font-weight:700;color:#04140d}.trbl{background:var(--up)!important}.trbs{background:#F04452!important;color:#fff!important}.trgo{width:100%;margin-top:10px}'
 +'.trnav{display:flex;align-items:flex-end;border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom)}.trnav button{flex:1;padding:8px 0!important;color:var(--mu);font-size:12px}.trnav button.on{color:var(--ac)}'
 +'.trnav button.c b{display:flex;margin:-18px auto 4px;width:48px;height:48px;border-radius:50%;background:var(--ac);color:#FFFFFF;align-items:center;justify-content:center;font-size:22px}'
