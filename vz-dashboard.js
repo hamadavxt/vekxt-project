@@ -3270,7 +3270,7 @@ function trClick(e){
   if(id==="trStSv")return trStopsSave(d.s);
   if(id==="trClr"){trDR=[];trRul=null;trDrSave();trShut();return}
   if(d.tf){pTf=d.tf;trTfBar();trKey="";trLoadCD();return}
-  if(d.tt){if(d.tt==="del"){if(trRul)trRul=null;else trDR.pop();trDrSave();return}trTool=TRS.lock?"cross":d.tt;trBar();return}
+  if(d.tt){if(d.tt==="del"){if(trRul)trRul=null;else trDR.pop();trDrSave();return}if(TRS.lock){TRS.lock=false;trSet()}trTool=d.tt;trBar();return}
   if(d.to){TRS[d.to]=!TRS[d.to];trSet();if(d.to==="magnet")trMk();if(TRS.lock)trTool="cross";trBar();return}
   if(d.n){if(d.n==="trade")trTicket(trSd);else trTabGo(d.n);return}
   if(b.parentNode&&b.parentNode.id==="trAct"){trTicket(d.s);return}
