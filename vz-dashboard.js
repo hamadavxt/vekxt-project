@@ -2905,7 +2905,7 @@ function trStopsSave(sym){
   if(ref&&((s2&&(lg?s2>=ref:s2<=ref))||(t2&&(lg?t2<=ref:t2>=ref)))){m.textContent=L("SL/TP di sisi yang salah.","SL/TP is on the wrong side.");return}
   PE.setStops(a,sym,{sl:s2,tp:t2});pSave();pSig="";trPSig="";trLsig="";trShut();trRender()}
 /* ===== Equity curve (kartu hitam di detail akun Perps) ===== */
-var pEqR="all",pEqSig="",pEqAt=0,pEqD=null,pEqHov=false;
+var pEqR="all",pEqSig="",pEqAt=0,pEqD=null,pEqHov=false;window.addEventListener("resize",function(){clearTimeout(pEqRs.t);pEqRs.t=setTimeout(function(){var a=selP!==null?PERPS[selP]:null;if(a&&$("pEq"))pEqRender(a)},250)});function pEqRs(){}
 function pEqNice(lo,hi){var sp=hi-lo||1,raw=sp/4,m=Math.pow(10,Math.floor(Math.log(raw)/Math.LN10)),f=raw/m,st=(f<=1?1:f<=2?2:f<=5?5:10)*m,a0=Math.floor(lo/st)*st,a1=Math.ceil(hi/st)*st,t=[];for(var v=a0;v<=a1+st*.001;v+=st)t.push(+v.toFixed(8));return{lo:a0,hi:a1,t:t}}
 function pEqTs(v){if(typeof v==="number"&&isFinite(v))return v;if(typeof v==="string"){var t=Date.parse(v);if(isFinite(t))return t}return NaN}
 function pEqPts(a,now,eq){
@@ -2915,7 +2915,7 @@ function pEqPts(a,now,eq){
   pts.push({t:Math.max(now,t0+6e4),b:+a.balance||b,e:+eq||b});return pts}
 function pEqRender(a){
   var el=$("pEq");if(!el||pEqHov)return;
-  var n=Date.now(),s=pReady(a)?PE.snapshot(a,BK):null,eq=s?s.equity:a.balance,sig=[a.trades.length,a.balance,Math.round(eq*100),pEqR,lang].join("|");
+  var n=Date.now(),s=pReady(a)?PE.snapshot(a,BK):null,eq=s?s.equity:a.balance,sig=[a.trades.length,a.balance,Math.round(eq*100),pEqR,lang,Math.round((el.clientWidth||360)/20)].join("|");
   if(sig===pEqSig&&el.firstChild)return;if(el.firstChild&&n-pEqAt<800)return;
   pEqAt=n;pEqSig=sig;
   var rng='<div class="eqs">'+[["7d","7D"],["30d","30D"],["all",L("Semua","All")]].map(function(r){return'<button type="button" data-pa="eqr" data-v="'+r[0]+'" class="'+(pEqR===r[0]?"on":"")+'">'+r[1]+'</button>'}).join("")+'</div>';
@@ -2924,7 +2924,7 @@ function pEqRender(a){
   if(days){var cut=n-days*864e5;if(pts[0].t<cut){var k=0;pts.forEach(function(p,i){if(p.t<=cut)k=i});var bs=pts[k];pts=[{t:cut,b:bs.b,e:bs.e}].concat(pts.filter(function(p){return p.t>cut}))}}
   var vals=[];pts.forEach(function(p){vals.push(p.b,p.e)});
   var lo0=Math.min.apply(null,vals),hi0=Math.max.apply(null,vals),pad=(hi0-lo0)*.08||Math.max(Math.abs(hi0)*.01,1),nc=pEqNice(lo0-pad,hi0+pad),lo=nc.lo,hi=nc.hi;
-  var W=360,H=230,Lm=50,Rm=10,Tm=10,Bm=24,t0=pts[0].t,t1=Math.max(pts[pts.length-1].t,t0+6e4);
+  var W=Math.max(300,Math.min(1200,Math.round(el.clientWidth-2)||360)),H=W>=700?240:W>=480?230:230,Lm=50,Rm=10,Tm=10,Bm=24,t0=pts[0].t,t1=Math.max(pts[pts.length-1].t,t0+6e4);
   var X=function(t){return Lm+(t-t0)/(t1-t0)*(W-Lm-Rm)},Y=function(v){return Tm+(hi-v)/(hi-lo)*(H-Tm-Bm)},col=eq>=a.size?"#22C55E":"#F04452";
   var fm=function(v){return hi-lo<20?v.toFixed(2):Math.round(v).toLocaleString("en-US")},f1=function(v){return v.toFixed(1)};
   var line=pts.map(function(p,i){return(i?"L":"M")+f1(X(p.t))+" "+f1(Y(p.e))}).join(" "),
